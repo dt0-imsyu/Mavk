@@ -17,6 +17,7 @@ public final class CoreComparisonActivity extends Activity {
     static native String runNullBuffers(byte[] shader,String report,boolean validation);
     static native String runNullImages(byte[] shader,String report,boolean validation);
     static native String runNullAtomics(byte[] shader,String report,boolean validation);
+    static native String runDescriptorGenerations(byte[] shader,String report,boolean validation);
     static native String runReuse(byte[] vertex,byte[] fragment,String report,boolean validation);
     static native String runRaster(byte[] vertex,byte[] fragment,String report,boolean validation);
     static native String runUi(byte[] vertex,byte[] fragment,String report,boolean validation);
@@ -33,7 +34,11 @@ public final class CoreComparisonActivity extends Activity {
         new Thread(() -> {
             String result;
             try {
-                if(getIntent().getBooleanExtra("nullAtomics",false)){
+                if(getIntent().getBooleanExtra("descriptorGenerations",false)){
+                    try(java.io.InputStream shader=getAssets().open("descriptor-generation.comp.spv")){
+                        result=runDescriptorGenerations(shader.readAllBytes(),new File(getFilesDir(),"core-descriptor-generations.json").getAbsolutePath(),getIntent().getBooleanExtra("validation",false));
+                    }
+                }else if(getIntent().getBooleanExtra("nullAtomics",false)){
                     try(java.io.InputStream shader=getAssets().open("null-atomics.comp.spv")){
                         result=runNullAtomics(shader.readAllBytes(),new File(getFilesDir(),"core-null-atomics.json").getAbsolutePath(),getIntent().getBooleanExtra("validation",false));
                     }

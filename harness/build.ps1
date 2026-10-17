@@ -64,7 +64,7 @@ foreach($shader in @('triangle.vert','triangle.frag')){
     & "$ndk/shader-tools/windows-x86_64/glslc.exe" --target-env=vulkan1.1 -mfmt=c "$PSScriptRoot/shaders/$shader" -o "$out/$shader.inc"
     Checked "$shader embedded words"
 }
-foreach($shader in @('sampled.vert','sampled.frag','sampled-scene.vert','sampled-scene.frag','bc-channels.frag','bc-hdr.frag')){
+foreach($shader in @('sampled.vert','sampled.frag','sampled-scene.vert','sampled-scene.frag','bc-channels.frag','bc-hdr.frag','descriptor-generation.comp')){
     & "$ndk/shader-tools/windows-x86_64/glslc.exe" --target-env=vulkan1.1 "$PSScriptRoot/shaders/$shader" -o "$out/payload/assets/$shader.spv"
     Checked "$shader sampled image test"
 }

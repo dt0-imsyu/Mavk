@@ -2,6 +2,43 @@
 
 ## Active development — shared Compatibility, Windows preserved
 
+Newest shared NativeDescriptorAdapter actual PASS. Portable native Vulkan API
+materializes real immutable pool/set/metadata/log generations from CPU snapshots;
+explicit shader ABI,typed resource/fallback resolver,strong leases and cached
+unchanged generations. No updates to older sets,no hidden destructor queue idle.
+Currently set0public+set1guard,no loader hooks/full descriptor API,see
+compatibility/NATIVE_DESCRIPTOR_ADAPTER.md. Diagnostic buffers remain enabled;
+changed-generation allocation/recycling and full consumer entry points OPEN.
+
+Actual Mali lifetime gate: two ordinary compute command buffers recorded with
+different generations BEFORE either executes,then shadow state/caller resource
+references dropped. Both original outputs PASS128words,distinct sets,old leases
+survive then expire after GPU completion. PoolCreates2/metadataUploads2/updates2,
+3 invalid materializations reject before allocations,cache hit no reallocation,
+SyncVal0/0,Corezero. Native adapter now used by existing buffer/atomic/image gates
+instead of their own VkCreate/Allocate/Update implementations.
+Latest installed APK native-descriptor-adapter3-20261018 SHA256
+992BB6DA80A3042C4F549EC6E2AD302C194293A907E3E114A021ED978EB68A73.
+core-descriptor-generations.json SHA256
+44987046bf7c2af076b314056002fcef31558c51c512dda8d7fd4b2467a4b944.
+Strict verify-descriptor-generations.py PASS. Same APK native null regressions:
+atomic1536/1024guards report47c7444c5e5f19da6fb8e752c75c85f34aea58f2b43471ef67cc462d5f487e7e;
+image1792/384 report58bc8fbecdeec87cd1e8947c4eeb15cfccdca510a745098e607872abbca24e09;
+buffer1536/896 report90811e0f41a96376cdb1cfc1a6b749c81dc174e8c76edad6b470e1d980368068.
+All SyncVal0/0,Corezero. Initial adapter2 lifetime test failed only at host
+invalidate-before-map (c86cb423... report retained),fixed mapping before readback;
+no platform changes. Adapter1 compile-only never deployed. No live build/test.
+NEXT: real consumer Vulkan update/copy/image entry points and shader/layout
+admission;complete BC/null/robustness semantics before Sarek D3D11 device/frame.
+No feature bits advertised,no DXVK PASS,no Windows/Ubuntu/P7/H264/storage edits.
+
+Space housekeeping: original LLVM archive/download pieces(16 files,1.083GiB)
+hash-verified on E:/Mavk/artifacts/toolchain-download-cache-20261018,source copies
+removed;actual extracted toolchain paths untouched. Historical September28 APKs
+also hash-archived(8 files,2.007GiB) to E:/U-AVF/artifacts/archived-test-apks-20261018;
+C51.266GiB free after relocation. Only ignored historical installers,not current APK,data or
+P7 images. This is recoverable file relocation,not release/source changes.
+
 Newest component common DescriptorState (compatibility/DESCRIPTOR_STATE.md):
 portable C++17,explicit unwritten/null/bound states,checked buffer ranges/whole
 size/alignment,kinds,overlap-safe copies,rejection atomicity,resource leases,

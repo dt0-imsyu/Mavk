@@ -36,6 +36,11 @@ updating a descriptor set still in use. A real asynchronous adapter must retain
 those separately and obey native descriptor update/submission synchronization.
 Do not treat the metadata builder as a malicious-shader sandbox.
 
+The shared native backend now supplies that missing native ownership layer:
+[NATIVE_DESCRIPTOR_ADAPTER.md](NATIVE_DESCRIPTOR_ADAPTER.md). It materializes
+immutable native generations and keeps pools/layouts/metadata/resources alive;
+CPU DescriptorState itself remains independent of VkDevice and native lifetime.
+
 ## Actual acceptance
 
 CPU test `test/descriptors.cpp`:34 assertions/25 rejected invalid operations,

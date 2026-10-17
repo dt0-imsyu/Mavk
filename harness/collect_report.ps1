@@ -1,5 +1,5 @@
 param(
-    [Parameter(Mandatory=$true)][ValidatePattern('^(feature-suite|native-compute|core-comparison|core-sampled|core-timeline|core-reuse|core-raster|core-bc(-channels|67|-texture)?|core-null-(buffers|images|atomics)|core-ui(-layers|-bridge)?|bridge-probe|mavk-bridge-report|graphics-lifecycle|graphics-[0-9]+)\.json$')][string]$ReportName,
+    [Parameter(Mandatory=$true)][ValidatePattern('^(feature-suite|native-compute|core-comparison|core-sampled|core-timeline|core-reuse|core-raster|core-descriptor-generations|core-bc(-channels|67|-texture)?|core-null-(buffers|images|atomics)|core-ui(-layers|-bridge)?|bridge-probe|mavk-bridge-report|graphics-lifecycle|graphics-[0-9]+)\.json$')][string]$ReportName,
     [Parameter(Mandatory=$true)][string]$OutputFile,
     [ValidateSet('org.mavk.probe','com.example.uavfwinpetest')][string]$Package='org.mavk.probe'
 )

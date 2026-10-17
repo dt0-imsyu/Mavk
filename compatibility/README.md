@@ -9,6 +9,11 @@ packing now live in `include/mavk/compat/descriptors.hpp`; native buffer/atomic
 and image gates consume this same state for real descriptors and metadata.
 See [DESCRIPTOR_STATE.md](DESCRIPTOR_STATE.md) for bounded API/lifetime rules.
 
+The native backend now materializes real immutable descriptor generations using
+that shared state: [NATIVE_DESCRIPTOR_ADAPTER.md](NATIVE_DESCRIPTOR_ADAPTER.md).
+The existing buffer/atomic/image gates use it instead of their own native
+pool/set/update code. This is not yet a consumer loader layer or complete ICD.
+
 Null/range shader guard feasibility and explicit unsupported cases:
 [NULL_RESOURCES.md](NULL_RESOURCES.md). Latest bounded native buffer proof is
 not sufficient to expose nullDescriptor or robustBufferAccess2 to consumers.

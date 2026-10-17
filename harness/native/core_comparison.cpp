@@ -3,6 +3,7 @@
 #include <mavk/compat/bc.hpp>
 #include <mavk/compat/sampled.hpp>
 #include <mavk/compat/descriptors.hpp>
+#include <mavk/compat/native_descriptors.hpp>
 #include <chrono>
 #include <fstream>
 #include <memory>
@@ -59,6 +60,7 @@ struct Root {
 #include "bc_texture_comparison.hpp"
 #include "null_buffers_comparison.hpp"
 #include "null_images_comparison.hpp"
+#include "descriptor_generation_comparison.hpp"
 #include "timeline_comparison.hpp"
 #include "reuse_comparison.hpp"
 #include "raster_comparison.hpp"
@@ -296,6 +298,13 @@ extern "C" JNIEXPORT jstring JNICALL Java_org_mavk_probe_CoreComparisonActivity_
 extern "C" JNIEXPORT jstring JNICALL Java_org_mavk_probe_CoreComparisonActivity_runNullAtomics(JNIEnv* env,jclass,jbyteArray input,jstring destination,jboolean validated){
     ValidationCapture validation;std::string result;
     try{jsize bytes=env->GetArrayLength(input);if(bytes<20||bytes>65536||bytes%4)throw std::runtime_error("null atomic shader bytes");std::vector<uint32_t> words(bytes/4);env->GetByteArrayRegion(input,0,bytes,reinterpret_cast<jbyte*>(words.data()));result=nullBuffersGate(words,validated,validation,true);if(validation.errors.load()||validation.warnings.load())throw std::runtime_error("null atomic validation errors/warnings");}
+    catch(const std::exception& e){result="{\"result\":\"FAIL\",\"error\":"+quote(e.what())+"}";}
+    result.insert(result.rfind('}'),validation.fields());const char* path=env->GetStringUTFChars(destination,nullptr);{std::ofstream f(path);f<<result;if(!f)result="REPORT_WRITE_FAILED";}env->ReleaseStringUTFChars(destination,path);return env->NewStringUTF(result.c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL Java_org_mavk_probe_CoreComparisonActivity_runDescriptorGenerations(JNIEnv* env,jclass,jbyteArray input,jstring destination,jboolean validated){
+    ValidationCapture validation;std::string result;
+    try{jsize bytes=env->GetArrayLength(input);if(bytes<20||bytes>65536||bytes%4)throw std::runtime_error("generation shader bytes");std::vector<uint32_t> words(bytes/4);env->GetByteArrayRegion(input,0,bytes,reinterpret_cast<jbyte*>(words.data()));result=descriptorGenerationGate(words,validated,validation);if(validation.errors.load()||validation.warnings.load())throw std::runtime_error("descriptor generations validation errors/warnings");}
     catch(const std::exception& e){result="{\"result\":\"FAIL\",\"error\":"+quote(e.what())+"}";}
     result.insert(result.rfind('}'),validation.fields());const char* path=env->GetStringUTFChars(destination,nullptr);{std::ofstream f(path);f<<result;if(!f)result="REPORT_WRITE_FAILED";}env->ReleaseStringUTFChars(destination,path);return env->NewStringUTF(result.c_str());
 }

@@ -19,6 +19,9 @@ public releases are authorized by that instruction. Preserve remote license.
 - [x] Shared descriptor state with explicit unwritten/null/bound distinction,
       resource leases,checked updates/copies,immutable cached snapshots/both ABIs;
       integrated into native descriptors and buffer/atomic/image GPU gates.
+- [x] Shared native Vulkan materializer with immutable set/metadata generations,
+      retained resources/fallbacks,unchanged-generation cache; actual two-recorded
+      generation execution/lifetime gate on Mali,SyncVal0/0.
 - [ ] Full Vulkan image/format/view/subresource adapter, execution-time integration.
 - [ ] Correct null images/texel buffers/arrays/atomics and required robustness2.
 - [ ] Actual Vulkan device +D3D11CreateDevice +swapchain +correct first frame.

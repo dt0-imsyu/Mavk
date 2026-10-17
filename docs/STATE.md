@@ -2,6 +2,37 @@
 
 ## Active development — shared Compatibility, Windows preserved
 
+Newest component common DescriptorState (compatibility/DESCRIPTOR_STATE.md):
+portable C++17,explicit unwritten/null/bound states,checked buffer ranges/whole
+size/alignment,kinds,overlap-safe copies,rejection atomicity,resource leases,
+generation+immutable per-ABI cached snapshots. CPU34 assertions/25negatives PASS.
+Ownership identity includes control block,not just raw address. Snapshots retain
+resources across descriptor-state mutation/teardown;caller retires afterGPU.
+Unwritten slots rejected,NOT silently treated partially-bound. This CPU model
+does NOT own native descriptor sets/pools or allow updating in-flight sets.
+
+Actual native gates now use that state for BOTH native VkWriteDescriptorSets
+values and guard metadata,instead of hand-packed offsets. Real Core Buffer and
+SampledImage owners plus complete storage-image+view leases,valid null fallback
+resources retained. Synchronous fence ownership,not async update-after-bind.
+shared-descriptors-native1-20261018 APK SHA256
+B43E1D628C337225FEF34C0FFC8DF359B565C777D062BB7BF1C84A2C2D8E6134.
+Fresh strict --shared-state gates on this APK all actual PASS:
+- atomicIAdd32+scalar range/UBO:1536words/1024guards,SyncVal0/0,Corezero;
+  report30515e1eed6f201a7ecdc6c670deea5af78bd975e2d5069b143b42926ba95884.
+- combined/storage image:1792words/384guards,SyncVal0/0,Corezero;
+  report58bc8fbecdeec87cd1e8947c4eeb15cfccdca510a745098e607872abbca24e09.
+- stock buffer-only ABI:1536words/896guards,SyncVal0/0,Corezero;
+  report79a03d0883ab83c9125174ccc265109daa929499b8c0f16d310d26639d846ac4.
+Snapshot cache pointer reuse checked natively in each phase. Tiny GPU command
+times NOT production overhead/FPS evidence. No full null/robustness2/BC feature
+advertising,no DXVK/D3D11 PASS. Existing shader bytes unchanged,4a0c898 compiler
+and old standalone BC/native gates preserved;no Windows/Ubuntu/H264/VM changes.
+No live build/test worker. C54.9GiB,E874.1GiB,tablet54280676KiB free,all>50GiB.
+NEXT: consumer Vulkan descriptor/image entry points and shader/layout admission,
+typed fallback cache,remaining arrays/image/atomic/robustness semantics before
+actual Sarek device/frame. No VM boot needed for every shared function.
+
 Newest integer buffer atomic extension actual Mali PASS:32-bit atomicAdd returns
 zero/no memory change for logical null; normal atomicAdd returns previous value
 and applies increment. Same gate retains scalar null/range/UBO checks;1536 words,

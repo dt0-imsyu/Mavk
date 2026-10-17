@@ -4,6 +4,11 @@ Shared, explicit compatibility implementations for native DroidDeck and U-AVF
 adapters. Never expose an entire Vulkan feature from a bounded helper PASS.
 No Adreno implementation is copied here. Vulkan Core and WDDM stay separate.
 
+Shared descriptor resource leases/update/copy/snapshot caching and guard ABI
+packing now live in `include/mavk/compat/descriptors.hpp`; native buffer/atomic
+and image gates consume this same state for real descriptors and metadata.
+See [DESCRIPTOR_STATE.md](DESCRIPTOR_STATE.md) for bounded API/lifetime rules.
+
 Null/range shader guard feasibility and explicit unsupported cases:
 [NULL_RESOURCES.md](NULL_RESOURCES.md). Latest bounded native buffer proof is
 not sufficient to expose nullDescriptor or robustBufferAccess2 to consumers.

@@ -6,6 +6,7 @@ import argparse
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("report", type=pathlib.Path)
 parser.add_argument("--atomics", action="store_true")
+parser.add_argument("--shared-state", action="store_true")
 args = parser.parse_args()
 report = json.loads(args.report.read_text(encoding="utf-8"))
 expected = {
@@ -27,6 +28,8 @@ expected = {
 if args.atomics:
     expected.update(result="EMULATED_NULL_BUFFER_ATOMIC_FEASIBILITY_PASS",
                     guarded_accesses=1024, atomic_iadd_tested=True)
+if args.shared_state:
+    expected.update(shared_descriptor_state=True, snapshot_cache_reused=True)
 for key, value in expected.items():
     actual = report.get(key)
     if type(actual) is not type(value) or actual != value:

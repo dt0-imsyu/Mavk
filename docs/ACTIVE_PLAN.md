@@ -16,6 +16,9 @@ public releases are authorized by that instruction. Preserve remote license.
       feasibility1792 words/384 guards,SyncVal0/0; all image semantics OPEN.
 - [x] Configurable combined shader pass and minimal integer-buffer atomic
       extension; actual32-bit atomicAdd null/valid result+side-effect PASS.
+- [x] Shared descriptor state with explicit unwritten/null/bound distinction,
+      resource leases,checked updates/copies,immutable cached snapshots/both ABIs;
+      integrated into native descriptors and buffer/atomic/image GPU gates.
 - [ ] Full Vulkan image/format/view/subresource adapter, execution-time integration.
 - [ ] Correct null images/texel buffers/arrays/atomics and required robustness2.
 - [ ] Actual Vulkan device +D3D11CreateDevice +swapchain +correct first frame.

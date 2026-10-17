@@ -2,6 +2,7 @@
 #include <mavk/core.hpp>
 #include <mavk/compat/bc.hpp>
 #include <mavk/compat/sampled.hpp>
+#include <mavk/compat/descriptors.hpp>
 #include <chrono>
 #include <fstream>
 #include <memory>

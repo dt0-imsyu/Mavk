@@ -9,9 +9,13 @@ std::string nullBuffersGate(const std::vector<uint32_t>& code,bool validated,Val
     uint64_t verified=0,records=0;double totalGpu=0;
     {
         const auto host=VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,coherent=VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-        mavk::Buffer left(context,512,VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,host,coherent),right(context,512,VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,host,coherent);
-        mavk::Buffer output(context,2048,VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,host,coherent);
-        mavk::Buffer uniform0(context,16,VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,host,coherent),uniform1(context,16,VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,host,coherent);
+        auto leftOwner=std::make_shared<mavk::Buffer>(context,512,VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,host,coherent),rightOwner=std::make_shared<mavk::Buffer>(context,512,VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,host,coherent);
+        auto outputOwner=std::make_shared<mavk::Buffer>(context,2048,VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,host,coherent);
+        auto uniform0Owner=std::make_shared<mavk::Buffer>(context,16,VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,host,coherent),uniform1Owner=std::make_shared<mavk::Buffer>(context,16,VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,host,coherent);
+        auto& left=*leftOwner;auto& right=*rightOwner;auto& output=*outputOwner;auto& uniform0=*uniform0Owner;auto& uniform1=*uniform1Owner;
+        using Kind=mavk::compat::DescriptorKind;using Abi=mavk::compat::GuardMetadataAbi;
+        mavk::compat::DescriptorState state({{0,0,2,Kind::StorageBuffer},{0,1,1,Kind::StorageBuffer},{0,2,2,Kind::UniformBuffer}}, {root.properties.limits.minUniformBufferOffsetAlignment,root.properties.limits.minStorageBufferOffsetAlignment});
+        state.bindBuffer(0,1,0,outputOwner,2048,0,2048);
         mavk::Buffer metadata(context,512,VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,host,coherent),log(context,32768,VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,host,coherent);
         auto a=static_cast<uint32_t*>(left.map()),b=static_cast<uint32_t*>(right.map()),o=static_cast<uint32_t*>(output.map());
         auto u0=static_cast<uint32_t*>(uniform0.map()),u1=static_cast<uint32_t*>(uniform1.map());
@@ -36,18 +40,23 @@ std::string nullBuffersGate(const std::vector<uint32_t>& code,bool validated,Val
         writes[1].dstSet=sets[0];writes[1].dstBinding=1;writes[1].descriptorCount=1;writes[1].descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;writes[1].pBufferInfo=&result;
         writes[2].dstSet=sets[0];writes[2].dstBinding=2;writes[2].descriptorCount=2;writes[2].descriptorType=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;writes[2].pBufferInfo=uniforms;
         for(unsigned i=0;i<2;i++){writes[3+i].dstSet=sets[1];writes[3+i].dstBinding=i;writes[3+i].descriptorCount=1;writes[3+i].descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;writes[3+i].pBufferInfo=&debug[i];}
-        vkUpdateDescriptorSets(root.device,5,writes,0,nullptr);
         // Same shader, same descriptors. Only metadata switches logical nulls.
         for(unsigned phase=0;phase<2;phase++){
             for(unsigned i=0;i<128;i++){a[i]=0xA000+i;b[i]=0xB000+i;}
             for(unsigned i=0;i<4;i++){u0[i]=0x1234;u1[i]=0x5678;}
             std::memset(o,0xCC,2048);std::memset(meta,0,512);std::memset(events,0,32768);
-            // --inst-buff-oob-check disables descriptor-index checks: the
-            // upstream pass uses Data[Data[Data[set+1]+binding]+index], not
-            // the four-level descriptor-init layout documented for idx mode.
-            meta[1]=24;meta[24]=32;meta[25]=34;meta[26]=35;
-            if(atomics){meta[0]=16;meta[1]=8;meta[8]=2;meta[9]=1;meta[10]=2;meta[16]=24;}
-            meta[32]=phase?256:0;meta[33]=phase?0:256;meta[34]=2048;meta[35]=phase?16:0;meta[36]=phase?0:16;
+            if(phase){state.bindBuffer(0,0,0,leftOwner,512,0,256);state.setNull(0,0,1);state.bindBuffer(0,2,0,uniform0Owner,16,0,16);state.setNull(0,2,1);}
+            else{state.setNull(0,0,0);state.bindBuffer(0,0,1,rightOwner,512,0,256);state.setNull(0,2,0);state.bindBuffer(0,2,1,uniform1Owner,16,0,16);}
+            auto abi=atomics?Abi::IndexAndInit:Abi::BufferRanges;auto snapshot=state.snapshot(abi);
+            if(snapshot!=state.snapshot(abi)||snapshot->metadata.size()*4>512)throw std::runtime_error("shared descriptor snapshot cache/budget");
+            std::memcpy(meta,snapshot->metadata.data(),snapshot->metadata.size()*4);
+            auto nativeBuffer=[&](uint32_t binding,uint32_t index,mavk::Buffer& fallback,uint64_t fallbackRange){
+                const auto& v=snapshot->at(0,binding,index);
+                if(v.status==mavk::compat::DescriptorStatus::Null)return VkDescriptorBufferInfo{fallback.handle(),0,fallbackRange};
+                auto owner=std::static_pointer_cast<const mavk::Buffer>(v.owner);return VkDescriptorBufferInfo{owner->handle(),v.offset,v.range};
+            };
+            data[0]=nativeBuffer(0,0,left,256);data[1]=nativeBuffer(0,1,right,256);uniforms[0]=nativeBuffer(2,0,uniform0,16);uniforms[1]=nativeBuffer(2,1,uniform1,16);result=nativeBuffer(1,0,output,2048);
+            vkUpdateDescriptorSets(root.device,5,writes,0,nullptr);
             left.flush();right.flush();output.flush();uniform0.flush();uniform1.flush();metadata.flush();log.flush();
             fence.reset();command.begin();auto cmd=command.handle();vkCmdResetQueryPool(cmd,root.query,0,2);vkCmdWriteTimestamp(cmd,VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,root.query,0);
             vkCmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,pipeline.handle());vkCmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,native.layout,0,2,sets,0,nullptr);vkCmdDispatch(cmd,1,1,1);
@@ -67,5 +76,5 @@ std::string nullBuffersGate(const std::vector<uint32_t>& code,bool validated,Val
         }
     }
     if(!context.counters().empty()||verified!=1536||records!=(atomics?1024u:896u))throw std::runtime_error("null gate coverage/resources");
-    std::ostringstream out;out<<"{\"result\":"<<quote(atomics?"EMULATED_NULL_BUFFER_ATOMIC_FEASIBILITY_PASS":"EMULATED_NULL_BUFFER_RANGE_FEASIBILITY_PASS")<<",\"device\":"<<quote(root.properties.deviceName)<<",\"verified_words\":"<<verified<<",\"guarded_accesses\":"<<records<<",\"gpu_submissions\":2,\"gpu_total_ms\":"<<totalGpu<<",\"core_live_zero\":true,\"nullDescriptor_advertised\":false,\"robustBufferAccess2_advertised\":false,\"atomic_iadd_tested\":"<<(atomics?"true":"false")<<",\"scope\":\"Scalar SSBO null/range load+store,UBO null load,optional guarded32-bit buffer IAdd,two static array slots. NOT all atomics/images/dynamic indexing/full robustness2/DXVK or production shader instrumentation.\"}";return out.str();
+    std::ostringstream out;out<<"{\"result\":"<<quote(atomics?"EMULATED_NULL_BUFFER_ATOMIC_FEASIBILITY_PASS":"EMULATED_NULL_BUFFER_RANGE_FEASIBILITY_PASS")<<",\"device\":"<<quote(root.properties.deviceName)<<",\"verified_words\":"<<verified<<",\"guarded_accesses\":"<<records<<",\"gpu_submissions\":2,\"gpu_total_ms\":"<<totalGpu<<",\"core_live_zero\":true,\"shared_descriptor_state\":true,\"snapshot_cache_reused\":true,\"nullDescriptor_advertised\":false,\"robustBufferAccess2_advertised\":false,\"atomic_iadd_tested\":"<<(atomics?"true":"false")<<",\"scope\":\"Shared descriptor state owns resource leases and drives native descriptors+guard metadata. Scalar SSBO/UBO,optional IAdd32,two static slots. NOT full Vulkan descriptor API,all atomics/images/dynamic indexing/robustness2/DXVK.\"}";return out.str();
 }

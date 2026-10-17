@@ -2,6 +2,21 @@
 
 ## Active development — shared Compatibility, Windows preserved
 
+2026-10-18 BC5 FILTER_LINEAR candidate actual PASS. Standalone rebuilt existing
+hybris compatibility DSO,NOT full libhybris/ICD replacement. New experimental
+bc5-rg32f.patch changes decoded BC5 image to RG32F with matching GPU output,
+destination bounds and scratch/copy sizing. Original DSO left untouched.
+Rebuilt baseline reproduces original896component result+missing BC5 filtering.
+Candidate all14 D3D BC format flags0xd001,896constant-component regression PASS;
+actual bilinear BC5 U/S384components over six palette phases (including negative
+SNORM) PASS;CPU destination-bound14checks PASS. Strict verify-bc5-filter.py PASS.
+8bytes/texel instead4,performance NOT measured. No full BC/null/D3D11 advertising.
+Candidate DSO179870fcf9e1cdfe0495d829df547b53bd950c63e2981ff162b53a4d02687654,
+artifacts E:/Mavk/artifacts/hybris-bc5-layer1-20261018. Full provenance/limitations
+in docs/HYBRIS_BC5_FILTER_2026-10-18.md. Native libs retain upstream licenses.
+Next: shared null/image consumer +experimental per-format BC admission in Sarek;
+global textureCompressionBC and mandatory nullDescriptor remain distinct blockers.
+
 2026-10-18 actual hybris BC API reuse A/B completed (see
 docs/HYBRIS_BC_REUSE_2026-10-18.md). Bare ICD reports0BC formats;enabling existing
 VK_LAYER_HYBRIS_compat gives14D3D formats,real compressed-image upload+compute

@@ -1,0 +1,53 @@
+diff --git a/hybris/vulkan/compat/bc_image.c b/hybris/vulkan/compat/bc_image.c
+--- a/hybris/vulkan/compat/bc_image.c
++++ b/hybris/vulkan/compat/bc_image.c
+@@ -38,9 +38,8 @@ VkFormat hybris_bc_image_format(VkFormat format, unsigned rgb_mask)
+     case VK_FORMAT_BC4_SNORM_BLOCK:
+         return VK_FORMAT_R16_SNORM;
+     case VK_FORMAT_BC5_UNORM_BLOCK:
+-        return VK_FORMAT_R16G16_UNORM;
+     case VK_FORMAT_BC5_SNORM_BLOCK:
+-        return VK_FORMAT_R16G16_SNORM;
++        return VK_FORMAT_R32G32_SFLOAT;
+     case VK_FORMAT_BC6H_UFLOAT_BLOCK: case VK_FORMAT_BC6H_SFLOAT_BLOCK:
+         return rgb_mask & 4 ? VK_FORMAT_R16G16B16_SFLOAT : VK_FORMAT_R16G16B16A16_SFLOAT;
+     default: return VK_FORMAT_UNDEFINED;
+diff --git a/hybris/vulkan/compat/bc_decode.c b/hybris/vulkan/compat/bc_decode.c
+--- a/hybris/vulkan/compat/bc_decode.c
++++ b/hybris/vulkan/compat/bc_decode.c
+@@ -113,6 +113,6 @@ VkResult hybris_bc_prepare(const struct hybris_bc_region *r,
+     uint64_t source_bytes = blocks * (mode < 2 || mode == 4 || mode == 5 || mode == 8 ? 8 : 16);
+     uint64_t destination_bytes = mode >= 12 ? ((pixels * 6 + 3) / 4) * 4 : mode == 8 ? ((pixels * 3 + 3) / 4) * 4 :
+-        mode == 4 || mode == 5 ? ((pixels + 1) / 2) * 4 : pixels * (mode >= 10 ? 8 : 4);
++        mode == 4 || mode == 5 ? ((pixels + 1) / 2) * 4 : pixels * (mode >= 10 || mode == 6 || mode == 7 ? 8 : 4);
+     if (r->source_offset > r->source_range || source_bytes > r->source_range - r->source_offset ||
+         r->destination_offset > r->destination_range || destination_bytes > r->destination_range - r->destination_offset)
+         return VK_ERROR_INITIALIZATION_FAILED;
+diff --git a/hybris/vulkan/compat/bc_transfer.c b/hybris/vulkan/compat/bc_transfer.c
+--- a/hybris/vulkan/compat/bc_transfer.c
++++ b/hybris/vulkan/compat/bc_transfer.c
+@@ -137,6 +137,7 @@ static VkResult decode(struct hybris_bc_transfer *t, VkCommandBuffer command,
+     if (!alignment) alignment = 1;
+     uint32_t texel_bytes = image->decoded_format == VK_FORMAT_R16G16B16_SFLOAT ? 6 :
+-        image->decoded_format == VK_FORMAT_R16G16B16A16_SFLOAT ? 8 : 4;
++        image->decoded_format == VK_FORMAT_R16G16B16A16_SFLOAT ||
++        image->decoded_format == VK_FORMAT_R32G32_SFLOAT ? 8 : 4;
+     uint32_t max_width = (uint32_t)(t->scratch_size / (16 * texel_bytes)) * 4;
+     if (!max_width) return VK_ERROR_FORMAT_NOT_SUPPORTED;
+     for (uint32_t layer = 0; layer < region->imageSubresource.layerCount; ++layer) {
+diff --git a/hybris/vulkan/compat/shaders/bc_decode.comp b/hybris/vulkan/compat/shaders/bc_decode.comp
+--- a/hybris/vulkan/compat/shaders/bc_decode.comp
++++ b/hybris/vulkan/compat/shaders/bc_decode.comp
+@@ -185,5 +185,12 @@ void main()
+             other = channel16(r.source_word + nb * 2, (ny & 3) * 4 + (nx & 3), snorm);
+         }
++        if (r.mode >= 6) {
++            float redValue = snorm ? float(int(red << 16) >> 16) / 32767.0 : float(red) / 65535.0;
++            float greenValue = snorm ? float(int(other << 16) >> 16) / 32767.0 : float(other) / 65535.0;
++            dst.data[r.destination_word + 2 * pixel] = floatBitsToUint(redValue);
++            dst.data[r.destination_word + 2 * pixel + 1] = floatBitsToUint(greenValue);
++            return;
++        }
+         uint destination = r.mode < 6 ? pixel / 2 : pixel;
+         dst.data[r.destination_word + destination] = red | (other << 16);
+         return;

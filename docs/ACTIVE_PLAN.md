@@ -30,7 +30,10 @@ public releases are authorized by that instruction. Preserve remote license.
 - [ ] Actual Vulkan device +D3D11CreateDevice +swapchain +correct first frame.
 - [x] Reuse proof: existing hybris compat layer executes compressed-image API
       upload+sampling for14 D3D BC identities on G925,896constant components.
-      BC5 UNORM/SNORM lack FILTER_LINEAR;full DXVK format admission NOT passed.
+      BC5 missing FILTER_LINEAR localized to native RG16 normalized backing.
+- [x] Isolated compatible BC5 RG32F backing/output/bounds patch:actual bilinear
+      signed/unsigned384components PASS;all14 format flags now satisfy fork's
+      per-format admission. Native bytes/texel8vs4,performance/fullBC still OPEN.
 - [ ] DroidDeck ABI/ICD integration and real D3D11 application, then small game.
 - [ ] Measure CPU/GPU/frame time/overhead; compare PanVK only if available/same device.
 

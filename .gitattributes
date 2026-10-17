@@ -1,0 +1,5 @@
+# Stable source checkouts on Windows; measured inputs/vendor pins stay byte-exact.
+* text=auto eol=lf
+compatibility/profiles/*.json -text -diff
+third_party/bcdec/bcdec.h -text
+third_party/bcdec/LICENSE -text

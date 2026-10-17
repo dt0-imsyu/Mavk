@@ -1,0 +1,22 @@
+#include "../windows/icd.cpp"
+#include <cassert>
+static const uint32_t code[]=
+#include "compute.comp.inc"
+;
+int main(){
+    unsigned rejected=0;uint32_t local=0;std::vector<uint32_t> words(std::begin(code),std::end(code));assert(mavk::bridge::computeShape(words,local)&&local==64);
+    auto broken=words;broken.push_back(0);assert(!mavk::bridge::computeShape(broken,local));rejected++;
+    for(size_t i=5;i<words.size();i+=words[i]>>16)if((words[i]&65535)==16&&(words[i]>>16)==6&&words[i+2]==17){for(uint32_t v:{0u,257u}){broken=words;broken[i+3]=v;assert(!mavk::bridge::computeShape(broken,local));rejected++;}broken=words;broken[i+4]=2;assert(!mavk::bridge::computeShape(broken,local));rejected++;}
+    Device device{};auto dh=handle<VkDevice>(&device);VkDescriptorSetLayoutBinding binding{0,VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,1,VK_SHADER_STAGE_COMPUTE_BIT,nullptr};VkDescriptorSetLayoutCreateInfo di{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};di.bindingCount=1;di.pBindings=&binding;VkDescriptorSetLayout descriptor{};assert(vkCreateDescriptorSetLayout(dh,&di,nullptr,&descriptor)==VK_SUCCESS);
+    VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,1};VkDescriptorPoolCreateInfo pi{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};pi.maxSets=1;pi.poolSizeCount=1;pi.pPoolSizes=&size;VkDescriptorPool pool{};assert(vkCreateDescriptorPool(dh,&pi,nullptr,&pool)==VK_SUCCESS);VkDescriptorSetAllocateInfo da{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};da.descriptorPool=pool;da.descriptorSetCount=1;da.pSetLayouts=&descriptor;VkDescriptorSet set{};assert(vkAllocateDescriptorSets(dh,&da,&set)==VK_SUCCESS);
+    VkPushConstantRange range{VK_SHADER_STAGE_COMPUTE_BIT,0,4};VkPipelineLayoutCreateInfo li{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};li.setLayoutCount=1;li.pSetLayouts=&descriptor;li.pushConstantRangeCount=1;li.pPushConstantRanges=&range;VkPipelineLayout layout{};assert(vkCreatePipelineLayout(dh,&li,nullptr,&layout)==VK_SUCCESS);
+    Shader shader;shader.code.resize(sizeof(code));std::memcpy(shader.code.data(),code,sizeof(code));VkComputePipelineCreateInfo ci{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};ci.stage={VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};ci.stage.stage=VK_SHADER_STAGE_COMPUTE_BIT;ci.stage.module=handle<VkShaderModule>(&shader);ci.stage.pName="main";ci.layout=layout;ci.basePipelineIndex=-1;VkPipeline pipeline{};assert(vkCreateComputePipelines(dh,VK_NULL_HANDLE,1,&ci,nullptr,&pipeline)==VK_SUCCESS);
+    Memory memory{&device,0,std::vector<uint8_t>(128)};Buffer buffer{128,&memory,0,VK_BUFFER_USAGE_STORAGE_BUFFER_BIT};VkDescriptorBufferInfo bi{handle<VkBuffer>(&buffer),16,64};VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};write.dstSet=set;write.descriptorCount=1;write.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;write.pBufferInfo=&bi;vkUpdateDescriptorSets(dh,1,&write,0,nullptr);assert(!as<DescriptorSet>(set)->bad);
+    Command c{};c.device=&device;VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};auto cmd=handle<VkCommandBuffer>(&c);assert(vkBeginCommandBuffer(cmd,&begin)==VK_SUCCESS);vkCmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,pipeline);vkCmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,layout,0,1,&set,0,nullptr);uint32_t seed=123;vkCmdPushConstants(cmd,layout,VK_SHADER_STAGE_COMPUTE_BIT,0,4,&seed);vkCmdDispatch(cmd,1,1,1);assert(vkEndCommandBuffer(cmd)==VK_SUCCESS&&c.computeGroups==1);
+    for(uint32_t groups:{0u,257u}){assert(vkBeginCommandBuffer(cmd,&begin)==VK_SUCCESS);vkCmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,pipeline);vkCmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,layout,0,1,&set,0,nullptr);vkCmdPushConstants(cmd,layout,VK_SHADER_STAGE_COMPUTE_BIT,0,4,&seed);vkCmdDispatch(cmd,groups,1,1);assert(c.bad&&vkEndCommandBuffer(cmd)!=VK_SUCCESS);rejected++;}
+    bi.offset=1;vkUpdateDescriptorSets(dh,1,&write,0,nullptr);assert(as<DescriptorSet>(set)->bad);rejected++;
+    VkQueueFamilyProperties q{};uint32_t n=1;vkGetPhysicalDeviceQueueFamilyProperties(VK_NULL_HANDLE,&n,&q);assert(q.queueFlags&VK_QUEUE_COMPUTE_BIT);
+    assert(vkGetDeviceProcAddr(dh,"vkCreateComputePipelines")&&vkGetDeviceProcAddr(dh,"vkCmdDispatch"));
+    vkDestroyPipeline(dh,pipeline,nullptr);vkDestroyPipelineLayout(dh,layout,nullptr);vkDestroyDescriptorPool(dh,pool,nullptr);vkDestroyDescriptorSetLayout(dh,descriptor,nullptr);
+    std::printf("ICD_COMPUTE_STATE_CPU_PASS rejects=%u (NOT GPU/guest PASS)\n",rejected);
+}

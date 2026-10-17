@@ -1,0 +1,621 @@
+{
+  "source_pin": "25ca63f17f34bdc05a39873ee63907d3cbbfa030",
+  "required_api": "1.3",
+  "mali_api_gate": true,
+  "required_feature_rows": [
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "depthBiasClamp",
+      "extension": null,
+      "owner": "core.features",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "depthClamp",
+      "extension": null,
+      "owner": "core.features",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "dualSrcBlend",
+      "extension": null,
+      "owner": "core.features",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "fillModeNonSolid",
+      "extension": null,
+      "owner": "core.features",
+      "turnip": true,
+      "mali": false,
+      "mali_class": "EMULATION NEEDED",
+      "mavk_guest": "EMULATION NEEDED"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "fragmentStoresAndAtomics",
+      "extension": null,
+      "owner": "core.features",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "fullDrawIndexUint32",
+      "extension": null,
+      "owner": "core.features",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "geometryShader",
+      "extension": null,
+      "owner": "core.features",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "imageCubeArray",
+      "extension": null,
+      "owner": "core.features",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "independentBlend",
+      "extension": null,
+      "owner": "core.features",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "multiDrawIndirect",
+      "extension": null,
+      "owner": "core.features",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "multiViewport",
+      "extension": null,
+      "owner": "core.features",
+      "turnip": true,
+      "mali": false,
+      "mali_class": "EMULATION NEEDED",
+      "mavk_guest": "EMULATION NEEDED"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "occlusionQueryPrecise",
+      "extension": null,
+      "owner": "core.features",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "robustBufferAccess",
+      "extension": null,
+      "owner": "core.features",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "sampleRateShading",
+      "extension": null,
+      "owner": "core.features",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "samplerAnisotropy",
+      "extension": null,
+      "owner": "core.features",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "shaderClipDistance",
+      "extension": null,
+      "owner": "core.features",
+      "turnip": true,
+      "mali": false,
+      "mali_class": "EMULATION NEEDED",
+      "mavk_guest": "EMULATION NEEDED"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "shaderCullDistance",
+      "extension": null,
+      "owner": "core.features",
+      "turnip": true,
+      "mali": false,
+      "mali_class": "EMULATION NEEDED",
+      "mavk_guest": "EMULATION NEEDED"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "shaderImageGatherExtended",
+      "extension": null,
+      "owner": "core.features",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "shaderInt16",
+      "extension": null,
+      "owner": "core.features",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "shaderInt64",
+      "extension": null,
+      "owner": "core.features",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "shaderSampledImageArrayDynamicIndexing",
+      "extension": null,
+      "owner": "core.features",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "textureCompressionBC",
+      "extension": null,
+      "owner": "core.features",
+      "turnip": true,
+      "mali": false,
+      "mali_class": "EMULATION NEEDED",
+      "mavk_guest": "EMULATION NEEDED"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "shaderDrawParameters",
+      "extension": null,
+      "owner": "vk11",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "storageBuffer16BitAccess",
+      "extension": null,
+      "owner": "vk11",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "bufferDeviceAddress",
+      "extension": null,
+      "owner": "vk12",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "descriptorIndexing",
+      "extension": null,
+      "owner": "vk12",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "storageBuffer8BitAccess",
+      "extension": null,
+      "owner": "vk12",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "descriptorBindingSampledImageUpdateAfterBind",
+      "extension": null,
+      "owner": "vk12",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "descriptorBindingUpdateUnusedWhilePending",
+      "extension": null,
+      "owner": "vk12",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "descriptorBindingPartiallyBound",
+      "extension": null,
+      "owner": "vk12",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "hostQueryReset",
+      "extension": null,
+      "owner": "vk12",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "runtimeDescriptorArray",
+      "extension": null,
+      "owner": "vk12",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "samplerMirrorClampToEdge",
+      "extension": null,
+      "owner": "vk12",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "scalarBlockLayout",
+      "extension": null,
+      "owner": "vk12",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "shaderInt8",
+      "extension": null,
+      "owner": "vk12",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "timelineSemaphore",
+      "extension": null,
+      "owner": "vk12",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "uniformBufferStandardLayout",
+      "extension": null,
+      "owner": "vk12",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "vulkanMemoryModel",
+      "extension": null,
+      "owner": "vk12",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "inlineUniformBlock",
+      "extension": null,
+      "owner": "vk13",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "computeFullSubgroups",
+      "extension": null,
+      "owner": "vk13",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "dynamicRendering",
+      "extension": null,
+      "owner": "vk13",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "maintenance4",
+      "extension": null,
+      "owner": "vk13",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "shaderDemoteToHelperInvocation",
+      "extension": null,
+      "owner": "vk13",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "shaderZeroInitializeWorkgroupMemory",
+      "extension": null,
+      "owner": "vk13",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "subgroupSizeControl",
+      "extension": null,
+      "owner": "vk13",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "synchronization2",
+      "extension": null,
+      "owner": "vk13",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_EXT_FEATURE",
+      "feature": "depthClipEnable",
+      "extension": "VK_EXT_depth_clip_enable",
+      "owner": "extDepthClipEnable",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_EXT_FEATURE",
+      "feature": "robustBufferAccess2",
+      "extension": "VK_EXT_robustness2",
+      "owner": "extRobustness2",
+      "turnip": true,
+      "mali": false,
+      "mali_class": "EMULATION NEEDED",
+      "mavk_guest": "EMULATION NEEDED"
+    },
+    {
+      "kind": "ENABLE_EXT_FEATURE",
+      "feature": "nullDescriptor",
+      "extension": "VK_EXT_robustness2",
+      "owner": "extRobustness2",
+      "turnip": true,
+      "mali": false,
+      "mali_class": "EMULATION NEEDED",
+      "mavk_guest": "EMULATION NEEDED"
+    },
+    {
+      "kind": "ENABLE_EXT",
+      "feature": null,
+      "extension": "VK_KHR_load_store_op_none",
+      "owner": "khrLoadStoreOpNone",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_EXT_FEATURE",
+      "feature": "maintenance5",
+      "extension": "VK_KHR_maintenance5",
+      "owner": "khrMaintenance5",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_EXT_FEATURE",
+      "feature": "maintenance6",
+      "extension": "VK_KHR_maintenance6",
+      "owner": "khrMaintenance6",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    },
+    {
+      "kind": "ENABLE_EXT",
+      "feature": null,
+      "extension": "VK_KHR_swapchain",
+      "owner": "khrSwapchain",
+      "turnip": true,
+      "mali": true,
+      "mali_class": "NATIVE",
+      "mavk_guest": "PASSTHROUGH MISSING"
+    }
+  ],
+  "mali_missing": [
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "fillModeNonSolid",
+      "extension": null,
+      "owner": "core.features",
+      "turnip": true,
+      "mali": false,
+      "mali_class": "EMULATION NEEDED",
+      "mavk_guest": "EMULATION NEEDED"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "multiViewport",
+      "extension": null,
+      "owner": "core.features",
+      "turnip": true,
+      "mali": false,
+      "mali_class": "EMULATION NEEDED",
+      "mavk_guest": "EMULATION NEEDED"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "shaderClipDistance",
+      "extension": null,
+      "owner": "core.features",
+      "turnip": true,
+      "mali": false,
+      "mali_class": "EMULATION NEEDED",
+      "mavk_guest": "EMULATION NEEDED"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "shaderCullDistance",
+      "extension": null,
+      "owner": "core.features",
+      "turnip": true,
+      "mali": false,
+      "mali_class": "EMULATION NEEDED",
+      "mavk_guest": "EMULATION NEEDED"
+    },
+    {
+      "kind": "ENABLE_FEATURE",
+      "feature": "textureCompressionBC",
+      "extension": null,
+      "owner": "core.features",
+      "turnip": true,
+      "mali": false,
+      "mali_class": "EMULATION NEEDED",
+      "mavk_guest": "EMULATION NEEDED"
+    },
+    {
+      "kind": "ENABLE_EXT_FEATURE",
+      "feature": "robustBufferAccess2",
+      "extension": "VK_EXT_robustness2",
+      "owner": "extRobustness2",
+      "turnip": true,
+      "mali": false,
+      "mali_class": "EMULATION NEEDED",
+      "mavk_guest": "EMULATION NEEDED"
+    },
+    {
+      "kind": "ENABLE_EXT_FEATURE",
+      "feature": "nullDescriptor",
+      "extension": "VK_EXT_robustness2",
+      "owner": "extRobustness2",
+      "turnip": true,
+      "mali": false,
+      "mali_class": "EMULATION NEEDED",
+      "mavk_guest": "EMULATION NEEDED"
+    }
+  ],
+  "mali_unknown": [],
+  "turnip_missing": [],
+  "turnip_unknown": [],
+  "push_constants_required": 256,
+  "mali_push_constants": 256.0,
+  "d3d11_runtime_executed": false,
+  "notes": [
+    "NATIVE means driver-advertised, not a new correctness PASS.",
+    "PASSTHROUGH MISSING is the bounded Mavk guest API, not libhybris direct native.",
+    "EMULATION NEEDED is unimplemented work, not advertised support.",
+    "Missing observations stay UNKNOWN; no made-up zero values."
+  ]
+}

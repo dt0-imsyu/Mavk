@@ -12,6 +12,10 @@ public releases are authorized by that instruction. Preserve remote license.
 - [x] Null SSBO load/store +UBO load guarded feasibility, no feature advertising.
 - [x] Scalar SSBO range read-zero/write-discard feasibility on native Mali;
       same metadata phases,1536 values/896 guards,SyncVal0/0. Full feature OPEN.
+- [x] Null combined-sampler texelFetch and R32_UINT storage image load/store
+      feasibility1792 words/384 guards,SyncVal0/0; all image semantics OPEN.
+- [x] Configurable combined shader pass and minimal integer-buffer atomic
+      extension; actual32-bit atomicAdd null/valid result+side-effect PASS.
 - [ ] Full Vulkan image/format/view/subresource adapter, execution-time integration.
 - [ ] Correct null images/texel buffers/arrays/atomics and required robustness2.
 - [ ] Actual Vulkan device +D3D11CreateDevice +swapchain +correct first frame.

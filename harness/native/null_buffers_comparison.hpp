@@ -1,6 +1,6 @@
 // Feasibility only. All native descriptors are valid resources. SPIRV-Tools
 // guards logical-null accesses using metadata; no robustness feature enabled.
-std::string nullBuffersGate(const std::vector<uint32_t>& code,bool validated,ValidationCapture& validation){
+std::string nullBuffersGate(const std::vector<uint32_t>& code,bool validated,ValidationCapture& validation,bool atomics=false){
     Root root(validation);root.init(validated);mavk::DeviceContext context(root.physical,root.device,root.family);
     struct Native {
         VkDevice device;VkDescriptorSetLayout sets[2]{};VkPipelineLayout layout{};VkDescriptorPool pool{};
@@ -46,6 +46,7 @@ std::string nullBuffersGate(const std::vector<uint32_t>& code,bool validated,Val
             // upstream pass uses Data[Data[Data[set+1]+binding]+index], not
             // the four-level descriptor-init layout documented for idx mode.
             meta[1]=24;meta[24]=32;meta[25]=34;meta[26]=35;
+            if(atomics){meta[0]=16;meta[1]=8;meta[8]=2;meta[9]=1;meta[10]=2;meta[16]=24;}
             meta[32]=phase?256:0;meta[33]=phase?0:256;meta[34]=2048;meta[35]=phase?16:0;meta[36]=phase?0:16;
             left.flush();right.flush();output.flush();uniform0.flush();uniform1.flush();metadata.flush();log.flush();
             fence.reset();command.begin();auto cmd=command.handle();vkCmdResetQueryPool(cmd,root.query,0,2);vkCmdWriteTimestamp(cmd,VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,root.query,0);
@@ -55,15 +56,16 @@ std::string nullBuffersGate(const std::vector<uint32_t>& code,bool validated,Val
             left.invalidate();right.invalidate();output.invalidate();log.invalidate();
             for(unsigned i=0;i<64;i++){
                 uint32_t expected[]={phase?0xA000+i:0,phase?0:0xB000+i,phase?0x1234u:0,phase?0:0x5678u,0,0,i,0xFACE};
+                if(atomics){expected[6]=phase?0xDEAD0000+i:0;expected[7]=phase?0:0xB003+i;}
                 for(unsigned j=0;j<8;j++){if(o[8*i+j]!=expected[j])throw std::runtime_error("null/bounds mismatch phase="+std::to_string(phase)+" invocation="+std::to_string(i)+" channel="+std::to_string(j)+" actual="+std::to_string(o[8*i+j])+" expected="+std::to_string(expected[j])+" guard_words="+std::to_string(events[0]));verified++;}
-                if(a[i]!=(phase?0xDEAD0000+i:0xA000+i)||b[i]!=(phase?0xB000+i:0xB003+i))throw std::runtime_error("null write leaked or valid write discarded");verified+=2;
+                if(a[i]!=(phase?0xDEAD0000+i+(atomics?7:0):0xA000+i)||b[i]!=(phase?0xB000+i:0xB003+i+(atomics?9:0)))throw std::runtime_error("null write leaked or valid write discarded");verified+=2;
                 if(a[i+64]!=0xA040+i||b[i+64]!=0xB040+i)throw std::runtime_error("out-of-range store changed protected sentinel");verified+=2;
             }
-            if(events[0]!=4928)throw std::runtime_error("null/bounds guards did not report exactly448 invalid accesses");
+            if(events[0]!=(atomics?5632u:4928u))throw std::runtime_error("null/bounds guard coverage");
             for(unsigned i=1;i<=events[0];i+=11)if(events[i]!=11||events[i+1]!=23||events[i+3]!=5||(events[i+7]!=4&&events[i+7]!=5))throw std::runtime_error("null/bounds instrumentation unexpected record");records+=events[0]/11;
             uint64_t ticks[2];ok(vkGetQueryPoolResults(root.device,root.query,0,2,sizeof(ticks),ticks,8,VK_QUERY_RESULT_64_BIT),"null timestamps");auto mask=root.bits==64?~0ull:((1ull<<root.bits)-1);totalGpu+=double((ticks[1]-ticks[0])&mask)*root.properties.limits.timestampPeriod/1e6;
         }
     }
-    if(!context.counters().empty()||verified!=1536||records!=896)throw std::runtime_error("null gate coverage/resources");
-    std::ostringstream out;out<<"{\"result\":\"EMULATED_NULL_BUFFER_RANGE_FEASIBILITY_PASS\",\"device\":"<<quote(root.properties.deviceName)<<",\"verified_words\":"<<verified<<",\"guarded_accesses\":"<<records<<",\"gpu_submissions\":2,\"gpu_total_ms\":"<<totalGpu<<",\"core_live_zero\":true,\"nullDescriptor_advertised\":false,\"robustBufferAccess2_advertised\":false,\"scope\":\"Scalar SSBO null/range load+store,UBO null load,two static array slots,metadata switches. NOT atomics/images/dynamic indexing/full robustness2/DXVK or production shader instrumentation.\"}";return out.str();
+    if(!context.counters().empty()||verified!=1536||records!=(atomics?1024u:896u))throw std::runtime_error("null gate coverage/resources");
+    std::ostringstream out;out<<"{\"result\":"<<quote(atomics?"EMULATED_NULL_BUFFER_ATOMIC_FEASIBILITY_PASS":"EMULATED_NULL_BUFFER_RANGE_FEASIBILITY_PASS")<<",\"device\":"<<quote(root.properties.deviceName)<<",\"verified_words\":"<<verified<<",\"guarded_accesses\":"<<records<<",\"gpu_submissions\":2,\"gpu_total_ms\":"<<totalGpu<<",\"core_live_zero\":true,\"nullDescriptor_advertised\":false,\"robustBufferAccess2_advertised\":false,\"atomic_iadd_tested\":"<<(atomics?"true":"false")<<",\"scope\":\"Scalar SSBO null/range load+store,UBO null load,optional guarded32-bit buffer IAdd,two static array slots. NOT all atomics/images/dynamic indexing/full robustness2/DXVK or production shader instrumentation.\"}";return out.str();
 }

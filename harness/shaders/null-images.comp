@@ -1,0 +1,18 @@
+#version 450
+layout(local_size_x=64) in;
+layout(set=0,binding=0) uniform sampler2D sampledImage[2];
+layout(set=0,binding=1,r32ui) uniform uimage2D storageImage[2];
+layout(set=0,binding=2,std430) buffer Results { uint value[768]; } results;
+void main(){
+    uint i=gl_GlobalInvocationID.x;
+    ivec2 xy=ivec2(i%8,i/8);
+    uvec4 a=uvec4(round(texelFetch(sampledImage[0],xy,0)*255.0));
+    uvec4 b=uvec4(round(texelFetch(sampledImage[1],xy,0)*255.0));
+    uint x=imageLoad(storageImage[0],xy).x;
+    uint y=imageLoad(storageImage[1],xy).x;
+    imageStore(storageImage[0],xy,uvec4(1000+i));
+    imageStore(storageImage[1],xy,uvec4(2000+i));
+    for(uint j=0;j<4;j++){results.value[12*i+j]=a[j];results.value[12*i+4+j]=b[j];}
+    results.value[12*i+8]=x;results.value[12*i+9]=y;
+    results.value[12*i+10]=i;results.value[12*i+11]=0xFACEu;
+}

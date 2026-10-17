@@ -15,6 +15,8 @@ public final class CoreComparisonActivity extends Activity {
     static native String runBc67(byte[] vertex,byte[] fragment,byte[] hdrFragment,String report,boolean validation);
     static native String runBcTexture(byte[] vertex,byte[] fragment,String report,boolean validation);
     static native String runNullBuffers(byte[] shader,String report,boolean validation);
+    static native String runNullImages(byte[] shader,String report,boolean validation);
+    static native String runNullAtomics(byte[] shader,String report,boolean validation);
     static native String runReuse(byte[] vertex,byte[] fragment,String report,boolean validation);
     static native String runRaster(byte[] vertex,byte[] fragment,String report,boolean validation);
     static native String runUi(byte[] vertex,byte[] fragment,String report,boolean validation);
@@ -31,7 +33,15 @@ public final class CoreComparisonActivity extends Activity {
         new Thread(() -> {
             String result;
             try {
-                if(getIntent().getBooleanExtra("nullBuffers",false)){
+                if(getIntent().getBooleanExtra("nullAtomics",false)){
+                    try(java.io.InputStream shader=getAssets().open("null-atomics.comp.spv")){
+                        result=runNullAtomics(shader.readAllBytes(),new File(getFilesDir(),"core-null-atomics.json").getAbsolutePath(),getIntent().getBooleanExtra("validation",false));
+                    }
+                }else if(getIntent().getBooleanExtra("nullImages",false)){
+                    try(java.io.InputStream shader=getAssets().open("null-images.comp.spv")){
+                        result=runNullImages(shader.readAllBytes(),new File(getFilesDir(),"core-null-images.json").getAbsolutePath(),getIntent().getBooleanExtra("validation",false));
+                    }
+                }else if(getIntent().getBooleanExtra("nullBuffers",false)){
                     try(java.io.InputStream shader=getAssets().open("null-buffers.comp.spv")){
                         result=runNullBuffers(shader.readAllBytes(),new File(getFilesDir(),"core-null-buffers.json").getAbsolutePath(),getIntent().getBooleanExtra("validation",false));
                     }

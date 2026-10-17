@@ -1,0 +1,28 @@
+diff --git a/source/opt/inst_bindless_check_pass.cpp b/source/opt/inst_bindless_check_pass.cpp
+--- a/source/opt/inst_bindless_check_pass.cpp
++++ b/source/opt/inst_bindless_check_pass.cpp
+@@ -190,7 +190,12 @@
+ bool InstBindlessCheckPass::AnalyzeDescriptorReference(Instruction* ref_inst,
+                                                        RefAnalysis* ref) {
+   ref->ref_inst = ref_inst;
+-  if (ref_inst->opcode() == SpvOpLoad || ref_inst->opcode() == SpvOpStore) {
++  // Mavk: integer buffer atomics share the pointer operand0 and byte-range
++  // analysis with ordinary scalar loads/stores. The existing guarded clone
++  // preserves scope/semantics/operands; an invalid result is zero and stores
++  // have no side effect. ImageTexelPointer is deliberately not admitted here.
++  const auto op = static_cast<uint32_t>(ref_inst->opcode());
++  if (op == SpvOpLoad || op == SpvOpStore || (op >= 227 && op <= 242)) {
+     ref->desc_load_id = 0;
+     ref->ptr_id = ref_inst->GetSingleWordInOperand(kSpvLoadPtrIdInIdx);
+     Instruction* ptr_inst = get_def_use_mgr()->GetDef(ref->ptr_id);
+diff --git a/source/util/small_vector.h b/source/util/small_vector.h
+--- a/source/util/small_vector.h
++++ b/source/util/small_vector.h
+@@ -20,6 +20,7 @@
+ #include <cassert>
+ #include <iostream>
+ #include <memory>
++#include <type_traits>
+ #include <utility>
+ #include <vector>
+ 

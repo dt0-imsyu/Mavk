@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$OutputDirectory,[string]$ValidationLibrary,[string]$DevelopmentBundle,[string]$UiSourceDirectory,[string]$NullBufferShader)
+param([Parameter(Mandatory=$true)][string]$OutputDirectory,[string]$ValidationLibrary,[string]$DevelopmentBundle,[string]$UiSourceDirectory,[string]$NullBufferShader,[string]$NullImageShader,[string]$NullAtomicShader)
 $ErrorActionPreference='Stop'
 $out=[IO.Path]::GetFullPath($OutputDirectory)
 if(Test-Path -LiteralPath $out){throw 'Preserve previous build; choose fresh output directory'}
@@ -25,6 +25,8 @@ if($DevelopmentBundle){
 }
 if($ValidationLibrary){Copy-Item -LiteralPath $ValidationLibrary -Destination "$out/payload/lib/arm64-v8a/libVkLayer_khronos_validation.so"}
 if($NullBufferShader){Copy-Item -LiteralPath $NullBufferShader -Destination "$out/payload/assets/null-buffers.comp.spv"}
+if($NullImageShader){Copy-Item -LiteralPath $NullImageShader -Destination "$out/payload/assets/null-images.comp.spv"}
+if($NullAtomicShader){Copy-Item -LiteralPath $NullAtomicShader -Destination "$out/payload/assets/null-atomics.comp.spv"}
 function Checked([string]$name){if($LASTEXITCODE){throw "$name failed ($LASTEXITCODE)"}}
 $nativeExtra=@();$nativeDefines=@()
 if($UiSourceDirectory){

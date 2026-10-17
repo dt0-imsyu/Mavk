@@ -48,13 +48,15 @@ Current verifier accepts this extended gate,not the earlier init-only report.
 
 ## Explicit remaining gaps
 
-- Old upstream pass does **not** guard buffer atomics: source reference analysis
-  admits OpLoad/OpStore and listed image operations, not OpAtomic*.
+- Stock upstream pass does **not** guard buffer atomics. The new configurable
+  compiler at `shaders/` applies a reviewed small extension to the same analysis;
+  actual Mali32-bit buffer atomicAdd null/valid-return+side-effect gate now PASS.
+  This does not imply all atomics,64-bit atomics or image atomics are supported.
 - Current `--inst-buff-oob-check` invocation does not enable image initialization
   checks. Combined guards require an explicit pass configuration, not arbitrary
   stacking that might instrument the generated debug resources themselves.
-- Dynamic/nonuniform descriptor arrays, image/sample/texel-buffer operations,
-  atomic results/side effects, aggregate/pointer access forms and required
+- Dynamic/nonuniform descriptor arrays, full image/sample/texel-buffer operations,
+  all atomic forms/results, aggregate/pointer access forms and required
   robustness2 alignments/partial-vector semantics are not accepted by this gate.
 - Metadata layout is test-only; no runtime descriptor update/copy/lifetime API,
   execution-time snapshot, shader cache key or consumer ICD integration yet.
@@ -71,3 +73,28 @@ run `instrument-null.py --tools <NDK shader-tools> input.spv output.spv`, then
 -OutputDirectory <fresh>`. Start CoreComparisonActivity with `nullBuffers=true`
 and `validation=true`; collect `core-null-buffers.json` using collect_report.ps1.
 Strict acceptance: verify-null-buffers.py. Do not replay on a running worker.
+
+## Subsequent image and integer atomic slices (actual2026-10-18)
+
+Image mode uses stock descriptor-init/index pass with four-level metadata.
+Both static combined sampler slots perform RGBA8 texelFetch; null returns all
+zero including alpha,valid pixels unchanged. R32_UINT storage images perform
+load/store; transfer readback proves null store left the sentinel intact and
+valid store wrote expected data. Two metadata phases swap null/live slots.
+PASS1792 values/384 guards,SyncVal0/0,Corezero. verify-null-images.py is strict.
+NOT filtered sampling/all image formats/ops/samplers/descriptor arrays support.
+
+Combined custom compiler enables index/init/buffer/texel guards in one pass and
+adds integer buffer atomic recognition without copying shader operations into
+a demonstration-specific implementation. Invalid atomicAdd returns0,no side
+effect; valid atomicAdd returns the old value and increments exact expected
+word. Actual PASS1536 values/1024 total guards,2GPU submits,SyncVal0/0,Corezero;
+tiny GPU command total0.0347692ms is NOT production overhead/FPS evidence.
+Strict verifier: verify-null-buffers.py --atomics. Atomics shader inherits scalar
+OOB load/store tests,not yet an out-of-range atomic test. Other atomic opcodes
+admitted by the patch still need actual semantic gates before feature exposure.
+
+Host compiler source/pins and full limitations: shaders/README.md. Core shader
+metadata is still experiment-owned,not a complete consumer Vulkan descriptor
+adapter. Runtime Android compilation/cache integration remains open. No feature
+advertising or DXVK PASS follows from these bounded gates.

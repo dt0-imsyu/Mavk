@@ -16,6 +16,10 @@ See third_party/bcdec/README.mavk.md for hashes and wrapper scope.
 - Android NDK shaderc/SPIRV-Tools: externally installed compiler/validator and
   instrumentation tools. The feasibility helper invokes them; no tool binary
   or modified upstream source is bundled in this repository.
+- Configurable shader tool: externally built SPIRV-Tools v2022.4 at eb0a366,
+  SPIRV-Headers85a1ed2,Apache2. The reviewed Mavk patch in compatibility/shaders
+  adds integer buffer atomic recognition and an explicit standard header include.
+  Upstream complete sources/licenses remain external; no wholesale driver copy.
 - Khronos Vulkan headers/validation layer: external SDK/build inputs. Use their
   respective upstream licenses when distributing those artifacts.
 - Optional Sascha Willems Vulkan examples / Dear ImGui: externally supplied,

@@ -1,6 +1,60 @@
-# Mavk checkpoint — 2026-10-17
+# Mavk checkpoint — 2026-10-18
 
 ## Active development — shared Compatibility, Windows preserved
+
+Newest integer buffer atomic extension actual Mali PASS:32-bit atomicAdd returns
+zero/no memory change for logical null; normal atomicAdd returns previous value
+and applies increment. Same gate retains scalar null/range/UBO checks;1536 words,
+1024guards,2submits,total GPU0.0347692ms,tiny correctness workload only.
+SyncVal0errors/0warnings,callback1,Corezero. Strict --atomics verifier PASS.
+Installed isolated APK null-atomics-native1-20261018 SHA256
+E1DC7B0BCA8A2C8160F718E19D5307F983F2E96FF0138EDB5DF42A0AF48BD638.
+core-null-atomics.json SHA256
+51b7d15c9aad103d4d270f7efde6b11aced10e200292538fd8e6289d43195671.
+Same APK fresh stock buffer regression PASS1536/896/SyncVal0/0,
+report845265a2bc25156a8ef945a23d8e5fefe65a64b7065649f529312cc23837c836;
+image regression PASS1792/384/SyncVal0/0,report98d28129... as below.
+
+Shared configurable host shader compiler built and executed successfully from
+upstream SPIRV-Tools eb0a366+headers85a1ed2 with reviewed buffer-atomics.patch.
+Compiler executable SHA256
+5134087A8C13CCACF722930FCFB67BF7982EECD2913790107C07A90403E39FA7.
+Generated/independently validated shader SHA256
+A0EF7D95782E1C7F551CF0EDF8FCA918BB5CDD8CF8F00486094ADC0C2720F381;
+rebuild after flag-atomic preflight rejection emits identical shader bytes.
+Patch adds core integer buffer atomic analysis+explicit type_traits include;
+no Adreno source,Windows/Ubuntu/owner APK/platform/display/storage changes.
+Stock legacy CLI helper still rejects ALL atomics. Combined compiler rejects
+image/flag/float/pointer-arithmetic forms. All admitted opcodes are NOT certified:
+only IAdd32 tested; out-of-range atomic,other atomic semantics/stages,full image
+ops/dynamic arrays,robustness2 and complete BC Vulkan API remain OPEN.
+No native/ICD feature advertising or DXVK/D3D11 PASS. Runtime Android shader
+compiler/cache and common consumer descriptor/image adapter remain next.
+No pending build/test worker. All sessions26072/35217 completed,do not resume.
+
+2026-10-18 current extension: null sampled/storage images actual Mali PASS1792
+words/384guards,4Core submits (2initial uploads+2dispatch),SyncVal0/0,Corezero.
+Tests two static slots switched by metadata; RGBA8 texelFetch includes zero alpha
+for null; R32_UINT imageLoad zero/imageStore discard verified by separate transfer
+readback. Native app only,no VM/owner/H264/Ubuntu changes. APK null-images-native1
+SHA25681F58FCCB3CB791E9EF750377863C605F5102E69316C4F96F7E49D1D7DD31D29;
+report98d28129aecbfae968c4d2e3fe0053f784514e10d2a49c20cf6f10f916e5f561.
+Strict verify-null-images.py PASS. Legacy instrument-null.py now has explicit
+--mode buffers/images and rejects core/extension atomics;4offline parser tests
+PASS,not shader/GPU conformance. nullDescriptor/robustness2 stay unadvertised.
+
+Completed compiler preparation: configurable combined SPIRV pass+minimal integer-buffer atomic
+extension. External source E:/Mavk/research/spirv-tools-v2022.4 pinnedeb0a366,
+headers85a1ed2; compatibility/shaders/{CMakeLists,tool.cpp,buffer-atomics.patch}
+track exact reviewable changes. Missing transitive type_traits caused first host
+build failure; explicit include fixes standalone header check. Build restarted
+incrementally parallel6 after stopping only verified CMake build process tree;
+session26072 completed shader-tool-build1-20261018 with logbuild-fixed.
+Bounded atomicAdd PASS is recorded above;do not extend it to other atomics.
+Old buffer/image gate still uses stockCLI+oldmetadata;
+atomics branch uses combined pass's four-level metadata. No pending native test
+worker: latest atomics+buffer+image gates completed. This slice is uploaded only
+to private Mavk after source checks;no public release or U-AVF push.
 
 2026-10-18 scalar null/range extension actual Android PASS:1536 verified words,
 896 guards,2submits,total GPU0.0305385ms (tiny correctness only),SyncVal0/0,

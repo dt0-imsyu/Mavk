@@ -2,6 +2,45 @@
 
 ## Active development — shared Compatibility, Windows preserved
 
+2026-10-18 Vulkan descriptor update frontend actual PASS:
+compatibility/VULKAN_DESCRIPTOR_UPDATES.md documents bounded ordinary Vulkan
+write/copy/layout structures -> common state -> native materializer. Trusted
+native-handle registry retains buffer/image/sampler owners; transactional ordered
+writes/copies,consecutive bindings/zero-count skip,whole-size and null validation.
+Null combined-image retains its valid sampler;destroyed references become
+undefined/reject snapshots,not stale handles. CPU16 assertions/16 negatives PASS;
+existing DescriptorState34/25 regression PASS (LLVM runtime DLL directory on PATH
+required for the host test executable; initial missing-DLL launch was NOT PASS).
+
+Final APK vulkan-descriptor-api-native2-20261018 SHA256
+817F41130C379ACD9A0DA32322D1051D6E967404FBF2F7EC6F3F4669498A5FF8.
+Installed only org.mavk.probe. Fresh reports under same artifact directory:
+- generations128words,two VkWrite structures+one VkCopy,real recorded lifetime,
+  cache,3rejects:7ea67d88bfd9739255930582db1f2f51c9b71ecd99db2952136de25968d8e537;
+  strict verifier --vulkan-api PASS.
+- images1792words/384guards:
+  58bc8fbecdeec87cd1e8947c4eeb15cfccdca510a745098e607872abbca24e09.
+- atomics1536words/1024guards:
+  cc761fd34892100e3cbde262e78e4a4e1eb4898ebb47a46fd53c0758df5efb64.
+All SyncVal0errors/0warnings,Core live zero. No loader exports/full command-buffer
+invalidation,automatic shader admission or full nullDescriptor/robustness2 claim.
+No DXVK device/frame PASS. NEXT: consumer layer integration and real per-format
+BC coverage;reuse existing hybris BC machinery where applicable,not duplicate it.
+
+Reuse lead only,NOT tested BC evidence: DroidDeck fork0916a538 pins libhybris
+bc8cb358 +protocolc6ae3c22;tools/hybris/patches/0001-dxvk-bc-profile.patch implements
+per-format GPU BC decode. dxvk policy deliberately skips BC1RGB;0002 vendor patch
+keeps full textureCompressionBC false (RGB/blit/filter guarantees incomplete).
+Existing per-format DXVK patch may avoid requiring the global BC boolean ONLY
+with real required-format checks. Do not widen G715 guards or claim G925 PASS.
+
+Disk: original Windows ISO staging directory(6.755GiB) hash-verified relocated to
+E:/U-AVF/inputs/win11-iso-work-20261018;old win11-iso-work path is a junction,
+retired duplicate absent. ISO bytes unchanged,no VM disk/clone. C still47.71GiB
+because independent installer consumption;I/O sample showed Epic helper~31MiB/s.
+User will pause Epic;process untouched. Proposed old backup relocation command
+was rejected before execution;backup remains on C,no claimed50GiB reserve yet.
+
 Newest shared NativeDescriptorAdapter actual PASS. Portable native Vulkan API
 materializes real immutable pool/set/metadata/log generations from CPU snapshots;
 explicit shader ABI,typed resource/fallback resolver,strong leases and cached

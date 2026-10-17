@@ -3,7 +3,13 @@ import json
 import pathlib
 import sys
 
-report = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+args = sys.argv[1:]
+vulkan_api = "--vulkan-api" in args
+if vulkan_api:
+    args.remove("--vulkan-api")
+if len(args) != 1:
+    raise SystemExit("usage: verify-descriptor-generations.py [--vulkan-api] REPORT")
+report = json.loads(pathlib.Path(args[0]).read_text(encoding="utf-8"))
 expected = {
     "result": "NATIVE_DESCRIPTOR_GENERATIONS_PASS",
     "device": "Mali-G925-Immortalis MC12",
@@ -25,6 +31,9 @@ expected = {
     "validation_warnings": 0,
     "validation_messages": [],
 }
+if vulkan_api:
+    expected.update(vulkan_descriptor_updates=True, api_write_structures=2,
+                    api_copy_structures=1)
 for key, value in expected.items():
     actual = report.get(key)
     if type(actual) is not type(value) or actual != value:

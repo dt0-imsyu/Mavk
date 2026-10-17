@@ -21,12 +21,21 @@ std::string nullImagesGate(const std::vector<uint32_t>& code,bool validated,Vali
         auto outputOwner=std::make_shared<mavk::Buffer>(context,3072,VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,host,coherent);auto& output=*outputOwner;
         mavk::Buffer readback(context,512,VK_BUFFER_USAGE_TRANSFER_DST_BIT,host,coherent);
         using Kind=mavk::compat::DescriptorKind;using Abi=mavk::compat::GuardMetadataAbi;
-        mavk::compat::DescriptorState state({{0,0,2,Kind::CombinedImageSampler},{0,1,2,Kind::StorageImage},{0,2,1,Kind::StorageBuffer}});
-        state.bindBuffer(0,2,0,outputOwner,3072,0,3072);
+        mavk::compat::VulkanDescriptorResources resources;mavk::compat::VulkanDescriptorUpdates updates(resources,{},true);
+        auto logical=reinterpret_cast<VkDescriptorSet>(uintptr_t(0x7003));
+        auto sampledInfo0=sampled0.descriptor(),sampledInfo1=sampled1.descriptor();
+        resources.registerImageView(sampledInfo0.imageView,VK_IMAGE_USAGE_SAMPLED_BIT,sampled0Owner);resources.registerImageView(sampledInfo1.imageView,VK_IMAGE_USAGE_SAMPLED_BIT,sampled1Owner);
+        resources.registerSampler(sampledInfo0.sampler,sampled0Owner);resources.registerSampler(sampledInfo1.sampler,sampled1Owner);
+        resources.registerImageView(storage0Owner->view,VK_IMAGE_USAGE_STORAGE_BIT,storage0Owner);resources.registerImageView(storage1Owner->view,VK_IMAGE_USAGE_STORAGE_BIT,storage1Owner);
+        resources.registerBuffer(outputOwner->handle(),3072,VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,outputOwner);
+        VkDescriptorSetLayoutBinding bindings[]={{0,VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,2,VK_SHADER_STAGE_COMPUTE_BIT,nullptr},{1,VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,2,VK_SHADER_STAGE_COMPUTE_BIT,nullptr},{2,VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,1,VK_SHADER_STAGE_COMPUTE_BIT,nullptr}};
+        VkDescriptorSetLayoutCreateInfo create{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};create.bindingCount=3;create.pBindings=bindings;updates.registerSet(logical,create);
+        VkDescriptorBufferInfo outputInfo{outputOwner->handle(),0,3072};VkWriteDescriptorSet outputWrite{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};outputWrite.dstSet=logical;outputWrite.dstBinding=2;outputWrite.descriptorCount=1;outputWrite.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;outputWrite.pBufferInfo=&outputInfo;updates.update(1,&outputWrite,0,nullptr);
         auto o=static_cast<uint32_t*>(output.map()),r=static_cast<uint32_t*>(readback.map());
         mavk::compat::NativeDescriptorAdapter adapter(context,{{0,0,2,Kind::CombinedImageSampler},{0,1,2,Kind::StorageImage},{0,2,1,Kind::StorageBuffer}},Abi::IndexAndInit);
         mavk::Shader shader(context,code.data(),code.size()*4);VkComputePipelineCreateInfo pc{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};pc.layout=adapter.pipelineLayout();pc.stage={VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};pc.stage.stage=VK_SHADER_STAGE_COMPUTE_BIT;pc.stage.module=shader.handle();pc.stage.pName="main";mavk::Pipeline pipeline(context,pc);mavk::CommandBatch command(context);mavk::Fence fence(context);
         auto resolver=[&](const mavk::compat::DescriptorBinding& binding,uint32_t index,const mavk::compat::DescriptorValue& value){
+            if(value.status==mavk::compat::DescriptorStatus::Bound)return mavk::compat::VulkanDescriptorResources::resolve(binding,index,value);
             mavk::compat::NativeDescriptorResource resource;bool null=value.status==mavk::compat::DescriptorStatus::Null;
             if(binding.kind==Kind::CombinedImageSampler){std::shared_ptr<const mavk::SampledImage> owner=null?(index?sampled1Owner:sampled0Owner):std::static_pointer_cast<const mavk::SampledImage>(value.owner);resource.owner=owner;resource.image=owner->descriptor();}
             else if(binding.kind==Kind::StorageImage){std::shared_ptr<const StorageLease> owner=null?(index?storage1Owner:storage0Owner):std::static_pointer_cast<const StorageLease>(value.owner);resource.owner=owner;resource.image={VK_NULL_HANDLE,owner->view,VK_IMAGE_LAYOUT_GENERAL};}
@@ -35,9 +44,12 @@ std::string nullImagesGate(const std::vector<uint32_t>& code,bool validated,Vali
         };
         for(unsigned phase=0;phase<2;phase++){
             std::memset(o,0xCC,3072);
-            if(phase){state.bindImage(0,0,0,sampled0Owner);state.setNull(0,0,1);state.bindImage(0,1,0,storage0Owner);state.setNull(0,1,1);}
-            else{state.setNull(0,0,0);state.bindImage(0,0,1,sampled1Owner);state.setNull(0,1,0);state.bindImage(0,1,1,storage1Owner);}
-            auto snapshot=state.snapshot(Abi::IndexAndInit);if(snapshot!=state.snapshot(Abi::IndexAndInit))throw std::runtime_error("shared image descriptor cache");
+            VkDescriptorImageInfo sampled[]={{sampledInfo0.sampler,phase?sampledInfo0.imageView:VK_NULL_HANDLE,VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},{sampledInfo1.sampler,phase?VK_NULL_HANDLE:sampledInfo1.imageView,VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}};
+            VkDescriptorImageInfo storage[]={{VK_NULL_HANDLE,phase?storage0Owner->view:VK_NULL_HANDLE,VK_IMAGE_LAYOUT_GENERAL},{VK_NULL_HANDLE,phase?VK_NULL_HANDLE:storage1Owner->view,VK_IMAGE_LAYOUT_GENERAL}};
+            VkWriteDescriptorSet writes[2]{};for(auto& w:writes){w.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;w.dstSet=logical;w.descriptorCount=2;}
+            writes[0].dstBinding=0;writes[0].descriptorType=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;writes[0].pImageInfo=sampled;
+            writes[1].dstBinding=1;writes[1].descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;writes[1].pImageInfo=storage;updates.update(2,writes,0,nullptr);
+            auto snapshot=updates.snapshot(logical,Abi::IndexAndInit);if(snapshot!=updates.snapshot(logical,Abi::IndexAndInit))throw std::runtime_error("shared image descriptor cache");
             auto native=adapter.materialize(snapshot,resolver);auto allocations=context.counters().totalAllocations;
             if(native!=adapter.materialize(snapshot,resolver)||context.counters().totalAllocations!=allocations||adapter.counters().updates!=phase+1)throw std::runtime_error("native image generation reallocated/updated");
             output.flush();

@@ -22,6 +22,9 @@ public releases are authorized by that instruction. Preserve remote license.
 - [x] Shared native Vulkan materializer with immutable set/metadata generations,
       retained resources/fallbacks,unchanged-generation cache; actual two-recorded
       generation execution/lifetime gate on Mali,SyncVal0/0.
+- [x] Bounded Vulkan-structure update/copy frontend and trusted resource registry;
+      ordered transactional writes/copies,consecutive bindings,resource retirement.
+      Not loader exports or full Vulkan update-after-bind semantics.
 - [ ] Full Vulkan image/format/view/subresource adapter, execution-time integration.
 - [ ] Correct null images/texel buffers/arrays/atomics and required robustness2.
 - [ ] Actual Vulkan device +D3D11CreateDevice +swapchain +correct first frame.

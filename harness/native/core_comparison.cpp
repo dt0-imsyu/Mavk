@@ -4,6 +4,7 @@
 #include <mavk/compat/sampled.hpp>
 #include <mavk/compat/descriptors.hpp>
 #include <mavk/compat/native_descriptors.hpp>
+#include <mavk/compat/vulkan_descriptor_updates.hpp>
 #include <chrono>
 #include <fstream>
 #include <memory>

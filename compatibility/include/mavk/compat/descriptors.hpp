@@ -52,8 +52,12 @@ public:
         }
     }
     uint64_t generation() const{return generation_;}
-    void setNull(uint32_t set,uint32_t binding,uint32_t element){
-        auto row=find(set,binding);requireRange(row,element,1);DescriptorValue value;value.status=DescriptorStatus::Null;assign(row,element,value);
+    const DescriptorValue& value(uint32_t set,uint32_t binding,uint32_t element) const {auto row=find(set,binding);requireRange(row,element,1);return values_[row][element];}
+    // Copying an undefined Vulkan descriptor propagates undefined state. This
+    // does not make an unwritten descriptor usable by a GPU snapshot.
+    void setUnwritten(uint32_t set,uint32_t binding,uint32_t element){auto row=find(set,binding);requireRange(row,element,1);assign(row,element,{});}
+    void setNull(uint32_t set,uint32_t binding,uint32_t element,std::shared_ptr<const void> owner={}){
+        auto row=find(set,binding);requireRange(row,element,1);DescriptorValue value;value.status=DescriptorStatus::Null;value.owner=std::move(owner);assign(row,element,value);
     }
     void bindBuffer(uint32_t set,uint32_t binding,uint32_t element,std::shared_ptr<const void> owner,uint64_t allocationBytes,uint64_t offset,uint64_t range){
         auto row=find(set,binding);requireRange(row,element,1);auto kind=bindings_[row].kind;

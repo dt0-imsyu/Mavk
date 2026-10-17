@@ -2,6 +2,17 @@
 
 ## Active development — shared Compatibility, Windows preserved
 
+2026-10-18 actual hybris BC API reuse A/B completed (see
+docs/HYBRIS_BC_REUSE_2026-10-18.md). Bare ICD reports0BC formats;enabling existing
+VK_LAYER_HYBRIS_compat gives14D3D formats,real compressed-image upload+compute
+sampling PASS896constant components on G925 under glibc/proot. Existing
+HYBRIS_BC_TEXTURES=dxvk alone is insufficient without the actual layer.
+NO full DXVK admission:BC5UNORM/SNORM lack FILTER_LINEAR (0xc001 vs0xd001);
+RGB-onlyBC1 excluded. No performance/fullcodec/validation/DroidDeck-session claim.
+No new library installation,VM/firmware/H264 changes. Native Mavk BC oracle and
+null/robustness consumer work remain active;do not duplicate existing GPU BC
+decoder blindly. Detailed hashes/logs+exact strict checker stored in reuse doc.
+
 2026-10-18 Vulkan descriptor update frontend actual PASS:
 compatibility/VULKAN_DESCRIPTOR_UPDATES.md documents bounded ordinary Vulkan
 write/copy/layout structures -> common state -> native materializer. Trusted

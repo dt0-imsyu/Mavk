@@ -7,6 +7,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("report", type=pathlib.Path)
 parser.add_argument("--atomics", action="store_true")
 parser.add_argument("--shared-state", action="store_true")
+parser.add_argument("--runtime-compiler", action="store_true")
 args = parser.parse_args()
 report = json.loads(args.report.read_text(encoding="utf-8"))
 expected = {
@@ -30,6 +31,16 @@ if args.atomics:
                     guarded_accesses=1024, atomic_iadd_tested=True)
 if args.shared_state:
     expected.update(shared_descriptor_state=True, snapshot_cache_reused=True)
+if args.runtime_compiler:
+    if not args.atomics:
+        raise SystemExit("FAIL: runtime compiler acceptance currently requires atomic workload")
+    expected.update(runtime_guard_compiler=True,guard_cache_hit=True,
+                    guard_compilations=1,guard_rejections=4,
+                    original_shader_bytes=3232,guarded_shader_bytes=9372)
+    for field in ("guard_compile_ms", "guard_cache_ms"):
+        value = report.get(field)
+        if type(value) not in (int, float) or not 0 <= value < 30000:
+            raise SystemExit(f"FAIL: compiler timing {field}")
 for key, value in expected.items():
     actual = report.get(key)
     if type(actual) is not type(value) or actual != value:

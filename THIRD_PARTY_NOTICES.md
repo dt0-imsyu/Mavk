@@ -17,9 +17,11 @@ See third_party/bcdec/README.mavk.md for hashes and wrapper scope.
   instrumentation tools. The feasibility helper invokes them; no tool binary
   or modified upstream source is bundled in this repository.
 - Configurable shader tool: externally built SPIRV-Tools v2022.4 at eb0a366,
-  SPIRV-Headers85a1ed2,Apache2. The reviewed Mavk patch in compatibility/shaders
+  SPIRV-Headers85a1ed2 (MIT-style); SPIRV-Tools is Apache2. The reviewed Mavk patch in compatibility/shaders
   adds integer buffer atomic recognition and an explicit standard header include.
   Upstream complete sources/licenses remain external; no wholesale driver copy.
+  Optional runtime-compiler harness builds statically link that external code;
+  complete SPIRV-Tools and SPIRV-Headers licenses are included in APK assets.
 - Khronos Vulkan headers/validation layer: external SDK/build inputs. Use their
   respective upstream licenses when distributing those artifacts.
 - Optional Sascha Willems Vulkan examples / Dear ImGui: externally supplied,

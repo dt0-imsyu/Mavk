@@ -25,6 +25,10 @@ public releases are authorized by that instruction. Preserve remote license.
 - [x] Bounded Vulkan-structure update/copy frontend and trusted resource registry;
       ordered transactional writes/copies,consecutive bindings,resource retirement.
       Not loader exports or full Vulkan update-after-bind semantics.
+- [x] Same portable guard compiler in host CLI and Android runtime with bounded
+      immutable-result LRU;actual original SPIR-V ->on-device compile ->Mali
+      atomic/null/range gate PASS1536words/1024guards,SyncVal0/0. Vulkan1.1/set0
+      experimental ABI only,not exhaustive shader admission/full consumer hooks.
 - [ ] Full Vulkan image/format/view/subresource adapter, execution-time integration.
 - [ ] Correct null images/texel buffers/arrays/atomics and required robustness2.
 - [ ] Actual Vulkan device +D3D11CreateDevice +swapchain +correct first frame.

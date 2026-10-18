@@ -2,6 +2,16 @@
 
 ## Active development — shared Compatibility, Windows preserved
 
+2026-10-18 shared runtime shader compiler actual Android PASS. Host CLI and
+native adapters now use GuardCompiler;bounded exact-input LRU/immutable results,
+serialized access. Original atomic3232B SPIR-V compiled on Mali host device to
+9372B in7.19138ms,warm hit0.000385ms(single samples).1536words/1024guards actual
+GPU PASS,4bad inputs reject,SyncVal0/0/Corezero. Host11assertions/5rejections PASS,
+CLI output unchanged SHA a0ef7d95... Same APK two-recorded descriptor generation
+regression128words/3rejects PASS. No feature advertising,D3D11 or full shader
+semantics claim. docs/RUNTIME_SHADER_COMPILER_2026-10-18.md has exact hashes,
+scope and next consumer integration work. Windows/Ubuntu/P7/H264 unchanged.
+
 2026-10-18 BC5 FILTER_LINEAR candidate actual PASS. Standalone rebuilt existing
 hybris compatibility DSO,NOT full libhybris/ICD replacement. New experimental
 bc5-rg32f.patch changes decoded BC5 image to RG32F with matching GPU output,

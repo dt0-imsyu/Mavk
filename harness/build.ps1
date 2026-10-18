@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$OutputDirectory,[string]$ValidationLibrary,[string]$DevelopmentBundle,[string]$UiSourceDirectory,[string]$NullBufferShader,[string]$NullImageShader,[string]$NullAtomicShader)
+param([Parameter(Mandatory=$true)][string]$OutputDirectory,[string]$ValidationLibrary,[string]$DevelopmentBundle,[string]$UiSourceDirectory,[string]$NullBufferShader,[string]$NullImageShader,[string]$NullAtomicShader,[string]$GuardCompilerBuild,[string]$RuntimeAtomicShader)
 $ErrorActionPreference='Stop'
 $out=[IO.Path]::GetFullPath($OutputDirectory)
 if(Test-Path -LiteralPath $out){throw 'Preserve previous build; choose fresh output directory'}
@@ -27,8 +27,19 @@ if($ValidationLibrary){Copy-Item -LiteralPath $ValidationLibrary -Destination "$
 if($NullBufferShader){Copy-Item -LiteralPath $NullBufferShader -Destination "$out/payload/assets/null-buffers.comp.spv"}
 if($NullImageShader){Copy-Item -LiteralPath $NullImageShader -Destination "$out/payload/assets/null-images.comp.spv"}
 if($NullAtomicShader){Copy-Item -LiteralPath $NullAtomicShader -Destination "$out/payload/assets/null-atomics.comp.spv"}
+if($RuntimeAtomicShader){if(!$GuardCompilerBuild){throw 'Runtime shader requires native guard compiler'};Copy-Item -LiteralPath $RuntimeAtomicShader -Destination "$out/payload/assets/null-atomics.original.spv"}
 function Checked([string]$name){if($LASTEXITCODE){throw "$name failed ($LASTEXITCODE)"}}
 $nativeExtra=@();$nativeDefines=@()
+if($GuardCompilerBuild){
+    foreach($relative in @('libmavk-shader-guards.a','spirv-tools/source/opt/libSPIRV-Tools-opt.a','spirv-tools/source/libSPIRV-Tools.a')){
+        $library=Join-Path $GuardCompilerBuild $relative
+        if(!(Test-Path -LiteralPath $library)){throw "Guard compiler archive missing: $relative"}
+        $nativeExtra+=$library
+    }
+    $nativeDefines+='-DMAVK_RUNTIME_GUARDS=1'
+    Copy-Item "$GuardCompilerBuild/licenses/SPIRV-Tools-LICENSE.txt" "$out/payload/assets/SPIRV-Tools-LICENSE.txt"
+    Copy-Item "$GuardCompilerBuild/licenses/SPIRV-Headers-LICENSE.txt" "$out/payload/assets/SPIRV-Headers-LICENSE.txt"
+}
 if($UiSourceDirectory){
     $ui=[IO.Path]::GetFullPath($UiSourceDirectory)
     $pins=@{'imgui.cpp'='e6a9bc1afe701da70d2cf8561bcd256c15c66f98';'imgui_draw.cpp'='3afcac4e9019772bbeb5ce1ff1793f59c916fb9e';'imgui_widgets.cpp'='110c4f86466d846aad1cf907e00573dd262f6281'}
@@ -50,7 +61,7 @@ if($UiSourceDirectory){
     }
     Copy-Item "$ui/LICENSE.md" "$out/payload/assets/upstream-vulkan-LICENSE.md"
     Copy-Item "$ui/external/imgui/LICENSE.txt" "$out/payload/assets/upstream-imgui-LICENSE.txt"
-    $nativeDefines=@('-DMAVK_NATIVE_UI=1','-I',"$ui/external/imgui")
+    $nativeDefines+=@('-DMAVK_NATIVE_UI=1','-I',"$ui/external/imgui")
 }
 & "$ndk/shader-tools/windows-x86_64/glslc.exe" --target-env=vulkan1.1 "$PSScriptRoot/shaders/verify.comp" -o "$out/payload/assets/verify.comp.spv"
 Checked 'shader'

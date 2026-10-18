@@ -24,6 +24,10 @@ Android-specific lifecycle,ICD loader hook or driver replacement is introduced.
   resolved descriptor must have a real resource lease and nonnull native handle.
   Buffer offsets/ranges/alignments and native type limits are checked before
   native allocations; bound buffer metadata must match the native descriptor.
+  Texel resources provide an owned real VkBufferView+backing and element count;
+  counts must fit native maxTexelBufferElements and match bound guard metadata.
+  The caller still validates shader view format/type compatibility;there is no
+  universal texel fallback or automatic reflection here.
 - Each changed CPU snapshot materializes an independent descriptor pool,public
   sets,guard set,immutable metadata allocation and diagnostic log. It never
   mutates sets belonging to an older snapshot. Resources/fallback leases,CPU

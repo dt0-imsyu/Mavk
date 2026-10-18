@@ -2,6 +2,16 @@
 
 ## Active development — shared Compatibility, Windows preserved
 
+2026-10-18 R32_UINT uniform/storage texel buffer actual GPU PASS. Sarek uses both
+types;common state/registry/updates/copies/templates/binder/native materializer
+now accept R32 scalar views with element-count guards and real backing leases.
+Actual original shader ->runtime compile ->VkWrite buffers/views ->Mali validates
+2304values/1152guards(null768,uniformOOB128,storageOOB256),sentinel writes preserved,
+SyncVal0/0/Corezero. CPU12checks/15negatives;state34/25,templates13/18,binder18/6
+regressions PASS. Same APK actual image1792values/384guards regression PASS.
+docs/TEXEL_BUFFER_CONSUMER_2026-10-18.md records hashes and limits. No loader-layer
+delivery or actual DXVK PASS this turn;remaining null/shader/consumer work OPEN.
+
 2026-10-18 multi-set shader/descriptor consumer building blocks actual PASS.
 Sarek dxvk_pipelayout.h separates GpViews0/GpBuffers1; fixed private set1 was a
 real conflict. GuardCompiler now reserves configurable private set after1..7

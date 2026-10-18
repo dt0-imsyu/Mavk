@@ -1,5 +1,12 @@
 # Null resources / range guards — feasibility, NOT feature support
 
+Current2026-10-18:common descriptor state/frontend/templates/bound-set composition,
+native materialization and on-device guard compilation now exist. Historical
+experiment notes below describe earlier milestones,not current missing APIs.
+Full loader/consumer integration and complete nullDescriptor/robustness2 remain
+OPEN. Actual R32_UINT texel-buffer extension:
+`../docs/TEXEL_BUFFER_CONSUMER_2026-10-18.md`.
+
 2026-10-17: stock Mali-G925 does not implement nullDescriptor. Binding a real
 sentinel resource is legal but **not** sufficient: null writes must be discarded,
 not stored in a dummy buffer. Native Vulkan feature bits remain unchanged.

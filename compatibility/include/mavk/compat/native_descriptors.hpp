@@ -14,6 +14,7 @@ struct NativeDescriptorResource {
     VkDescriptorBufferInfo buffer{};
     uint64_t bufferBytes=0;
     VkDescriptorImageInfo image{};
+    VkBufferView texelView{};uint64_t texelElements=0;
 };
 struct NativeDescriptorCounters {uint64_t poolCreates=0,metadataUploads=0,updates=0,liveSnapshots=0;};
 namespace descriptor_detail {
@@ -24,6 +25,8 @@ inline VkDescriptorType type(DescriptorKind k){switch(k){
     case DescriptorKind::CombinedImageSampler:return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     case DescriptorKind::SampledImage:return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
     case DescriptorKind::StorageImage:return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    case DescriptorKind::UniformTexelBuffer:return VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER;
+    case DescriptorKind::StorageTexelBuffer:return VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER;
 }throw std::invalid_argument("native descriptor kind");}
 struct Layouts {
     VkDevice device{};std::vector<DescriptorBinding> bindings;std::vector<VkDescriptorSetLayout> sets;VkPipelineLayout pipeline{};
@@ -104,6 +107,9 @@ public:
                 if(b.range==VK_WHOLE_SIZE)b.range=resource.bufferBytes-b.offset;
                 if(!b.range||b.range>resource.bufferBytes-b.offset||b.range>maxRange)throw std::invalid_argument("native buffer range");
                 if(value.status==DescriptorStatus::Bound&&(value.offset!=b.offset||value.range!=b.range))throw std::invalid_argument("native buffer/guard mismatch");
+            }else if(binding.kind==DescriptorKind::UniformTexelBuffer||binding.kind==DescriptorKind::StorageTexelBuffer){
+                if(!resource.texelView||!resource.texelElements||resource.texelElements>layouts_->limits.maxTexelBufferElements)throw std::invalid_argument("native texel buffer view/size");
+                if(value.status==DescriptorStatus::Bound&&(value.offset||value.range!=resource.texelElements))throw std::invalid_argument("native texel/guard mismatch");
             }else{
                 const auto& image=resource.image;
                 if(!image.imageView||(binding.kind==DescriptorKind::CombinedImageSampler&&!image.sampler))throw std::invalid_argument("native image/view/sampler");
@@ -124,7 +130,9 @@ public:
         std::vector<VkWriteDescriptorSet> writes;size_t index=0;
         for(const auto& b:layouts_->bindings)for(uint32_t i=0;i<b.count;i++,index++){
             VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};write.dstSet=result->sets_[b.set];write.dstBinding=b.binding;write.dstArrayElement=i;write.descriptorCount=1;write.descriptorType=descriptor_detail::type(b.kind);
-            if(b.kind==DescriptorKind::UniformBuffer||b.kind==DescriptorKind::StorageBuffer)write.pBufferInfo=&result->resources_[index].buffer;else write.pImageInfo=&result->resources_[index].image;writes.push_back(write);
+            if(b.kind==DescriptorKind::UniformBuffer||b.kind==DescriptorKind::StorageBuffer)write.pBufferInfo=&result->resources_[index].buffer;
+            else if(b.kind==DescriptorKind::UniformTexelBuffer||b.kind==DescriptorKind::StorageTexelBuffer)write.pTexelBufferView=&result->resources_[index].texelView;
+            else write.pImageInfo=&result->resources_[index].image;writes.push_back(write);
         }
         VkDescriptorBufferInfo guards[]={{result->log_->handle(),0,result->log_->size()},{result->metadata_->handle(),0,result->metadata_->size()}};
         for(uint32_t i=0;i<2;i++){VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};write.dstSet=result->sets_.back();write.dstBinding=i;write.descriptorCount=1;write.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;write.pBufferInfo=&guards[i];writes.push_back(write);}

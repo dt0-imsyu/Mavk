@@ -13,6 +13,8 @@ case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:return DescriptorKind::StorageBuffer;
 case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:return DescriptorKind::CombinedImageSampler;
 case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:return DescriptorKind::SampledImage;
 case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:return DescriptorKind::StorageImage;
+case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:return DescriptorKind::UniformTexelBuffer;
+case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:return DescriptorKind::StorageTexelBuffer;
 default:throw std::invalid_argument("UNSUPPORTED descriptor type");}}
 }
 // Per-device trusted handle registry. Native handles never originate from an
@@ -21,7 +23,8 @@ class VulkanDescriptorResources {
 public:
     struct Resource {
         VkBuffer buffer{};VkImageView view{};VkSampler sampler{};VkImageLayout imageLayout{};
-        uint64_t bytes=0;VkBufferUsageFlags bufferUsage{};VkImageUsageFlags imageUsage{};
+        uint64_t bytes=0;VkBufferUsageFlags bufferUsage{};VkImageUsageFlags imageUsage{};VkBufferView texelView{};uint64_t texelElements=0;
+        std::shared_ptr<const Resource> backing;
         std::shared_ptr<const void> owner;std::shared_ptr<const Resource> image,sampling;bool active=true;
     };
     void registerBuffer(VkBuffer handle,uint64_t bytes,VkBufferUsageFlags usage,std::shared_ptr<const void> owner){
@@ -32,6 +35,15 @@ public:
         if(!handle||!owner||views_.count(descriptor_api::key(handle)))throw std::invalid_argument("image-view registration");
         auto r=std::make_shared<Resource>();r->view=handle;r->imageUsage=usage;r->owner=std::move(owner);views_.emplace(descriptor_api::key(handle),std::move(r));
     }
+    // Caller already created this real view. Currently R32 scalar formats only;
+    // native format features/alignment are checked at actual view creation.
+    void registerBufferView(VkBufferView view,VkBuffer bufferHandle,VkFormat format,uint64_t offset,uint64_t range,std::shared_ptr<const void> owner){
+        auto buffer=lookup(buffers_,descriptor_api::key(bufferHandle));
+        if(!view||!owner||texelViews_.count(descriptor_api::key(view))||(format!=VK_FORMAT_R32_UINT&&format!=VK_FORMAT_R32_SINT&&format!=VK_FORMAT_R32_SFLOAT)||offset>=buffer->bytes||offset%4)throw std::invalid_argument("UNSUPPORTED texel buffer view");
+        if(range==VK_WHOLE_SIZE)range=buffer->bytes-offset;
+        if(!range||range>buffer->bytes-offset||range%4||range/4>UINT32_MAX||!(buffer->bufferUsage&(VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT|VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT)))throw std::invalid_argument("texel view range/usage");
+        auto r=std::make_shared<Resource>();r->texelView=view;r->texelElements=range/4;r->backing=std::move(buffer);r->owner=std::move(owner);texelViews_.emplace(descriptor_api::key(view),std::move(r));
+    }
     void registerSampler(VkSampler handle,std::shared_ptr<const void> owner){
         if(!handle||!owner||samplers_.count(descriptor_api::key(handle)))throw std::invalid_argument("sampler registration");
         auto r=std::make_shared<Resource>();r->sampler=handle;r->owner=std::move(owner);samplers_.emplace(descriptor_api::key(handle),std::move(r));
@@ -39,8 +51,10 @@ public:
     void unregisterBuffer(VkBuffer h){erase(buffers_,descriptor_api::key(h));}
     void unregisterImageView(VkImageView h){erase(views_,descriptor_api::key(h));}
     void unregisterSampler(VkSampler h){erase(samplers_,descriptor_api::key(h));}
+    void unregisterBufferView(VkBufferView h){erase(texelViews_,descriptor_api::key(h));}
     std::shared_ptr<const Resource> buffer(VkBuffer h) const{return lookup(buffers_,descriptor_api::key(h));}
     std::shared_ptr<const Resource> sampler(VkSampler h) const{return lookup(samplers_,descriptor_api::key(h));}
+    std::shared_ptr<const Resource> texelView(VkBufferView h,DescriptorKind kind) const{auto r=lookup(texelViews_,descriptor_api::key(h));auto usage=kind==DescriptorKind::UniformTexelBuffer?VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT:VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT;if(!r->backing->active||!(r->backing->bufferUsage&usage))throw std::invalid_argument("texel view backing/descriptor usage");return r;}
     static std::shared_ptr<const Resource> nullImageSampler(std::shared_ptr<const Resource> sampling,std::shared_ptr<const Resource> previous={}){
         if(previous&&!previous->image&&previous->sampling==sampling)return previous;
         auto r=std::make_shared<Resource>();r->sampler=sampling->sampler;r->sampling=std::move(sampling);return r;
@@ -58,18 +72,19 @@ public:
         if(previous&&previous->image==view&&previous->sampling==sampling&&previous->imageLayout==info.imageLayout)return previous;
         auto r=std::make_shared<Resource>();r->view=info.imageView;r->sampler=combined?info.sampler:VK_NULL_HANDLE;r->imageLayout=info.imageLayout;r->image=view;r->sampling=sampling;return r;
     }
-    static bool alive(const DescriptorValue& value){if(!value.owner)return value.status!=DescriptorStatus::Bound;auto r=std::static_pointer_cast<const Resource>(value.owner);return r->active&&(!r->image||r->image->active)&&(!r->sampling||r->sampling->active);}
+    static bool alive(const DescriptorValue& value){if(!value.owner)return value.status!=DescriptorStatus::Bound;auto r=std::static_pointer_cast<const Resource>(value.owner);return r->active&&(!r->image||r->image->active)&&(!r->sampling||r->sampling->active)&&(!r->backing||r->backing->active);}
     static NativeDescriptorResource resolve(const DescriptorBinding& binding,uint32_t,const DescriptorValue& value){
         if(value.status!=DescriptorStatus::Bound||!alive(value))throw std::invalid_argument("explicit typed null fallback or live descriptor required");
         auto resource=std::static_pointer_cast<const Resource>(value.owner);NativeDescriptorResource out;out.owner=resource;
         if(binding.kind==DescriptorKind::UniformBuffer||binding.kind==DescriptorKind::StorageBuffer){out.buffer={resource->buffer,value.offset,value.range};out.bufferBytes=resource->bytes;}
+        else if(binding.kind==DescriptorKind::UniformTexelBuffer||binding.kind==DescriptorKind::StorageTexelBuffer){out.texelView=resource->texelView;out.texelElements=resource->texelElements;}
         else out.image={resource->sampler,resource->view,resource->imageLayout};return out;
     }
 private:
     using Map=std::map<uint64_t,std::shared_ptr<Resource>>;
     static std::shared_ptr<const Resource> lookup(const Map& map,uint64_t key){auto at=map.find(key);if(!key||at==map.end()||!at->second->active)throw std::invalid_argument("unknown/live resource handle required");return at->second;}
     static void erase(Map& map,uint64_t key){auto at=map.find(key);if(!key||at==map.end())throw std::invalid_argument("unknown resource unregister");at->second->active=false;map.erase(at);}
-    Map buffers_,views_,samplers_;
+    Map buffers_,views_,samplers_,texelViews_;
 };
 // Vulkan-structure consumer adapter,not exported loader entry points. Logical
 // VkDescriptorSet keys are allocated by a future ICD/layer; NEVER pass them to
@@ -119,6 +134,7 @@ public:
                 const auto& value=sources[set]->values[row][i];
                 if(value.status==DescriptorStatus::Null)state.setNull(set,binding.binding,i,value.owner);
                 else if(binding.kind==DescriptorKind::UniformBuffer||binding.kind==DescriptorKind::StorageBuffer)state.bindBuffer(set,binding.binding,i,value.owner,value.offset+value.range,value.offset,value.range);
+                else if(binding.kind==DescriptorKind::UniformTexelBuffer||binding.kind==DescriptorKind::StorageTexelBuffer)state.bindTexelBuffer(set,binding.binding,i,value.owner,value.range);
                 else state.bindImage(set,binding.binding,i,value.owner);
             }
         }
@@ -132,7 +148,7 @@ public:
             auto entry=info.pDescriptorUpdateEntries[n];auto kind=descriptor_api::kind(entry.descriptorType);
             span(set,entry.dstBinding,entry.dstArrayElement,entry.descriptorCount,entry.descriptorType);
             if(entry.descriptorCount>65536-total)throw std::invalid_argument("template descriptor budget");total+=entry.descriptorCount;
-            size_t bytes=kind==DescriptorKind::UniformBuffer||kind==DescriptorKind::StorageBuffer?sizeof(VkDescriptorBufferInfo):sizeof(VkDescriptorImageInfo);
+            size_t bytes=kind==DescriptorKind::UniformBuffer||kind==DescriptorKind::StorageBuffer?sizeof(VkDescriptorBufferInfo):(kind==DescriptorKind::UniformTexelBuffer||kind==DescriptorKind::StorageTexelBuffer?sizeof(VkBufferView):sizeof(VkDescriptorImageInfo));
             constexpr size_t limit=16*1024*1024;
             if(entry.offset>limit-bytes||(entry.descriptorCount>1&&entry.stride>(limit-entry.offset-bytes)/(entry.descriptorCount-1)))throw std::invalid_argument("template source extent/overflow");
             out.required_=std::max(out.required_,entry.offset+entry.stride*(entry.descriptorCount-1)+bytes);out.entries_.push_back(entry);
@@ -151,11 +167,13 @@ public:
         if(!data||dataBytes<descriptorTemplate.required_)throw std::invalid_argument("template source bytes missing");
         std::vector<VkWriteDescriptorSet> writes(descriptorTemplate.entries_.size());
         std::vector<std::vector<VkDescriptorBufferInfo>> buffers(writes.size());std::vector<std::vector<VkDescriptorImageInfo>> images(writes.size());
+        std::vector<std::vector<VkBufferView>> texels(writes.size());
         auto source=static_cast<const unsigned char*>(data);
         for(size_t n=0;n<writes.size();n++){
             const auto& e=descriptorTemplate.entries_[n];auto kind=descriptor_api::kind(e.descriptorType);auto& w=writes[n];
             w.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;w.dstSet=set;w.dstBinding=e.dstBinding;w.dstArrayElement=e.dstArrayElement;w.descriptorType=e.descriptorType;w.descriptorCount=e.descriptorCount;
             if(kind==DescriptorKind::UniformBuffer||kind==DescriptorKind::StorageBuffer){buffers[n].resize(e.descriptorCount);for(uint32_t i=0;i<e.descriptorCount;i++)std::memcpy(&buffers[n][i],source+e.offset+e.stride*i,sizeof(VkDescriptorBufferInfo));w.pBufferInfo=buffers[n].data();}
+            else if(kind==DescriptorKind::UniformTexelBuffer||kind==DescriptorKind::StorageTexelBuffer){texels[n].resize(e.descriptorCount);for(uint32_t i=0;i<e.descriptorCount;i++)std::memcpy(&texels[n][i],source+e.offset+e.stride*i,sizeof(VkBufferView));w.pTexelBufferView=texels[n].data();}
             else{images[n].resize(e.descriptorCount);for(uint32_t i=0;i<e.descriptorCount;i++)std::memcpy(&images[n][i],source+e.offset+e.stride*i,sizeof(VkDescriptorImageInfo));w.pImageInfo=images[n].data();}
         }
         update(uint32_t(writes.size()),writes.data(),0,nullptr);
@@ -171,11 +189,14 @@ public:
             const auto& w=writes[n];if(w.sType!=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET||w.pNext)throw std::invalid_argument("UNSUPPORTED descriptor write chain");
             auto slots=span(find(w.dstSet),w.dstBinding,w.dstArrayElement,w.descriptorCount,w.descriptorType);auto kind=descriptor_api::kind(w.descriptorType);auto& destination=edit(w.dstSet);
             bool buffer=kind==DescriptorKind::UniformBuffer||kind==DescriptorKind::StorageBuffer;
-            if((buffer&&!w.pBufferInfo)||(!buffer&&!w.pImageInfo))throw std::invalid_argument("descriptor write data missing");
+            bool texel=kind==DescriptorKind::UniformTexelBuffer||kind==DescriptorKind::StorageTexelBuffer;
+            if((buffer&&!w.pBufferInfo)||(texel&&!w.pTexelBufferView)||(!buffer&&!texel&&!w.pImageInfo))throw std::invalid_argument("descriptor write data missing");
             for(uint32_t i=0;i<w.descriptorCount;i++){
                 const auto slot=slots[i];
                 if(buffer){const auto& info=w.pBufferInfo[i];if(!info.buffer){if(!allowNull_||info.offset||info.range!=VK_WHOLE_SIZE)throw std::invalid_argument("null buffer descriptor contract");destination.setNull(0,slot.first,slot.second);continue;}
                     auto resource=resources_.buffer(info.buffer);auto usage=kind==DescriptorKind::UniformBuffer?VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT:VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;if(!(resource->bufferUsage&usage))throw std::invalid_argument("buffer descriptor usage");destination.bindBuffer(0,slot.first,slot.second,resource,resource->bytes,info.offset,info.range);
+                }else if(texel){auto h=w.pTexelBufferView[i];if(!h){if(!allowNull_)throw std::invalid_argument("null texel descriptor not enabled");destination.setNull(0,slot.first,slot.second);}
+                    else{auto r=resources_.texelView(h,kind);destination.bindTexelBuffer(0,slot.first,slot.second,r,r->texelElements);}
                 }else{const auto& info=w.pImageInfo[i];std::shared_ptr<const VulkanDescriptorResources::Resource> sampling;
                     if(kind==DescriptorKind::CombinedImageSampler)sampling=resources_.sampler(info.sampler);
                     if(!info.imageView){if(!allowNull_)throw std::invalid_argument("null image writes not enabled in adapter");

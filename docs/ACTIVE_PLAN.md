@@ -37,6 +37,9 @@ public releases are authorized by that instruction. Preserve remote license.
       guard3 PASS1536words/1024guards,SyncVal0/0. No loader binding interception.
 - [ ] Full Vulkan image/format/view/subresource adapter, execution-time integration.
 - [ ] Correct null images/texel buffers/arrays/atomics and required robustness2.
+- [x] Bounded R32 texel descriptor/view frontend through templates/binder/native
+      materialization;actual R32_UINT fetch/load/store/null/OOB GPU gate2304words/
+      1152guards,SyncVal0/0. Other formats/operations/full feature remain OPEN.
 - [ ] Actual Vulkan device +D3D11CreateDevice +swapchain +correct first frame.
 - [x] Reuse proof: existing hybris compat layer executes compressed-image API
       upload+sampling for14 D3D BC identities on G925,896constant components.

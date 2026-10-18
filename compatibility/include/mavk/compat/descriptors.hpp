@@ -7,7 +7,7 @@
 #include <vector>
 
 namespace mavk::compat {
-enum class DescriptorKind {UniformBuffer,StorageBuffer,CombinedImageSampler,SampledImage,StorageImage};
+enum class DescriptorKind {UniformBuffer,StorageBuffer,CombinedImageSampler,SampledImage,StorageImage,UniformTexelBuffer,StorageTexelBuffer};
 enum class DescriptorStatus {Unwritten,Null,Bound};
 enum class GuardMetadataAbi {BufferRanges,IndexAndInit};
 struct DescriptorBinding {uint32_t set,binding,count;DescriptorKind kind;};
@@ -46,7 +46,7 @@ public:
             const auto& b=bindings_[i];
             if(b.set>=8||b.binding>=1024||!b.count||b.count>65536||(total+=b.count)>65536)
                 throw std::invalid_argument("descriptor layout bound");
-            switch(b.kind){case DescriptorKind::UniformBuffer:case DescriptorKind::StorageBuffer:case DescriptorKind::CombinedImageSampler:case DescriptorKind::SampledImage:case DescriptorKind::StorageImage:break;default:throw std::invalid_argument("descriptor kind not implemented");}
+            switch(b.kind){case DescriptorKind::UniformBuffer:case DescriptorKind::StorageBuffer:case DescriptorKind::CombinedImageSampler:case DescriptorKind::SampledImage:case DescriptorKind::StorageImage:case DescriptorKind::UniformTexelBuffer:case DescriptorKind::StorageTexelBuffer:break;default:throw std::invalid_argument("descriptor kind not implemented");}
             if(i&&bindings_[i-1].set==b.set&&bindings_[i-1].binding==b.binding)throw std::invalid_argument("duplicate descriptor binding");
             values_.emplace_back(b.count);
         }
@@ -73,6 +73,12 @@ public:
         if((kind!=DescriptorKind::CombinedImageSampler&&kind!=DescriptorKind::SampledImage&&kind!=DescriptorKind::StorageImage)||!owner)
             throw std::invalid_argument("image descriptor kind/owner");
         assign(row,element,{DescriptorStatus::Bound,std::move(owner),0,1});
+    }
+    // Texel metadata is an element count,never a buffer byte range.
+    void bindTexelBuffer(uint32_t set,uint32_t binding,uint32_t element,std::shared_ptr<const void> owner,uint64_t elements){
+        auto row=find(set,binding);requireRange(row,element,1);auto kind=bindings_[row].kind;
+        if((kind!=DescriptorKind::UniformTexelBuffer&&kind!=DescriptorKind::StorageTexelBuffer)||!owner||!elements||elements>UINT32_MAX)throw std::invalid_argument("texel descriptor owner/element count");
+        assign(row,element,{DescriptorStatus::Bound,std::move(owner),0,elements});
     }
     // One explicitly compatible binding range, not Vulkan's cross-binding spill.
     // Snapshot before writing so same-array overlap behaves like memmove.

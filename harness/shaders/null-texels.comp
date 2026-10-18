@@ -1,0 +1,21 @@
+#version 450
+layout(local_size_x=64) in;
+layout(set=0,binding=0) uniform usamplerBuffer sampled[2];
+layout(r32ui,set=0,binding=1) uniform uimageBuffer storage[2];
+layout(set=0,binding=2,std430) buffer Results { uint value[768]; } result;
+void main(){
+    uint i=gl_GlobalInvocationID.x;
+    result.value[10*i]=texelFetch(sampled[0],int(i)).x;
+    result.value[10*i+1]=texelFetch(sampled[1],int(i)).x;
+    result.value[10*i+2]=imageLoad(storage[0],int(i)).x;
+    result.value[10*i+3]=imageLoad(storage[1],int(i)).x;
+    imageStore(storage[0],int(i),uvec4(1000+i));
+    imageStore(storage[1],int(i),uvec4(2000+i));
+    result.value[10*i+4]=texelFetch(sampled[0],int(i+64)).x;
+    result.value[10*i+5]=texelFetch(sampled[1],int(i+64)).x;
+    result.value[10*i+6]=imageLoad(storage[0],int(i+64)).x;
+    result.value[10*i+7]=imageLoad(storage[1],int(i+64)).x;
+    imageStore(storage[0],int(i+64),uvec4(0xBAD0));
+    imageStore(storage[1],int(i+64),uvec4(0xBAD1));
+    result.value[10*i+8]=i;result.value[10*i+9]=0xFACE;
+}

@@ -16,6 +16,7 @@ public final class CoreComparisonActivity extends Activity {
     static native String runBcTexture(byte[] vertex,byte[] fragment,String report,boolean validation);
     static native String runNullBuffers(byte[] shader,String report,boolean validation);
     static native String runNullImages(byte[] shader,String report,boolean validation);
+    static native String runNullTexels(byte[] shader,String report,boolean validation);
     static native String runNullAtomics(byte[] shader,String report,boolean validation);
     static native String runRuntimeNullAtomics(byte[] shader,String report,boolean validation,boolean multiSet);
     static native String runDescriptorGenerations(byte[] shader,String report,boolean validation);
@@ -36,7 +37,11 @@ public final class CoreComparisonActivity extends Activity {
         new Thread(() -> {
             String result;
             try {
-                if(getIntent().getBooleanExtra("runtimeGuards",false)||getIntent().getBooleanExtra("runtimeMultiSets",false)){
+                if(getIntent().getBooleanExtra("nullTexels",false)){
+                    try(java.io.InputStream shader=getAssets().open("null-texels.original.spv")){
+                        result=runNullTexels(shader.readAllBytes(),new File(getFilesDir(),"core-null-texels.json").getAbsolutePath(),getIntent().getBooleanExtra("validation",false));
+                    }
+                }else if(getIntent().getBooleanExtra("runtimeGuards",false)||getIntent().getBooleanExtra("runtimeMultiSets",false)){
                     boolean multiSet=getIntent().getBooleanExtra("runtimeMultiSets",false);
                     try(java.io.InputStream shader=getAssets().open(multiSet?"null-atomics.multiset.original.spv":"null-atomics.original.spv")){
                         result=runRuntimeNullAtomics(shader.readAllBytes(),new File(getFilesDir(),"core-null-atomics.json").getAbsolutePath(),getIntent().getBooleanExtra("validation",false),multiSet);

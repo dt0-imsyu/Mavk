@@ -2,6 +2,15 @@
 
 ## Active development — shared Compatibility, Windows preserved
 
+2026-10-18 descriptor update templates actual PASS. Sarek calls this API;
+common frontend now owns/validates entry schema and bounded offset/stride source,
+then uses existing transactional updates and resource leases. CPU13checks/18
+negatives PASS,ordinary updates16/16 regression PASS. On Mali two template
+updates+copy ->two recorded generations128words PASS,SyncVal0/0/Corezero.
+compatibility/VULKAN_DESCRIPTOR_UPDATES.md has exact contracts/hashes. Still no
+loader hooks/full shader/descriptor semantics or DXVK device claim. Production
+Windows/Ubuntu untouched;next remains actual consumer integration and full null.
+
 2026-10-18 shared runtime shader compiler actual Android PASS. Host CLI and
 native adapters now use GuardCompiler;bounded exact-input LRU/immutable results,
 serialized access. Original atomic3232B SPIR-V compiled on Mali host device to

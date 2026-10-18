@@ -334,6 +334,13 @@ extern "C" JNIEXPORT jstring JNICALL Java_org_mavk_probe_CoreComparisonActivity_
     result.insert(result.rfind('}'),validation.fields());const char* path=env->GetStringUTFChars(destination,nullptr);{std::ofstream f(path);f<<result;if(!f)result="REPORT_WRITE_FAILED";}env->ReleaseStringUTFChars(destination,path);return env->NewStringUTF(result.c_str());
 }
 
+extern "C" JNIEXPORT jstring JNICALL Java_org_mavk_probe_CoreComparisonActivity_runDescriptorTemplates(JNIEnv* env,jclass,jbyteArray input,jstring destination,jboolean validated){
+    ValidationCapture validation;std::string result;
+    try{jsize bytes=env->GetArrayLength(input);if(bytes<20||bytes>65536||bytes%4)throw std::runtime_error("template shader bytes");std::vector<uint32_t> words(bytes/4);env->GetByteArrayRegion(input,0,bytes,reinterpret_cast<jbyte*>(words.data()));result=descriptorGenerationGate(words,validated,validation,true);if(validation.errors.load()||validation.warnings.load())throw std::runtime_error("descriptor template validation errors/warnings");}
+    catch(const std::exception& e){result="{\"result\":\"FAIL\",\"error\":"+quote(e.what())+"}";}
+    result.insert(result.rfind('}'),validation.fields());const char* path=env->GetStringUTFChars(destination,nullptr);{std::ofstream f(path);f<<result;if(!f)result="REPORT_WRITE_FAILED";}env->ReleaseStringUTFChars(destination,path);return env->NewStringUTF(result.c_str());
+}
+
 namespace {
 struct BridgeOwner {
     ValidationCapture validation;

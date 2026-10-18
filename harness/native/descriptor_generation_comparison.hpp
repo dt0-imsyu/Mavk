@@ -1,4 +1,4 @@
-std::string descriptorGenerationGate(const std::vector<uint32_t>& code,bool validated,ValidationCapture& validation){
+std::string descriptorGenerationGate(const std::vector<uint32_t>& code,bool validated,ValidationCapture& validation,bool templates=false){
     Root root(validation);root.init(validated);mavk::DeviceContext context(root.physical,root.device,root.family);
     {
         using K=mavk::compat::DescriptorKind;using A=mavk::compat::GuardMetadataAbi;
@@ -19,7 +19,12 @@ std::string descriptorGenerationGate(const std::vector<uint32_t>& code,bool vali
         auto resolve=mavk::compat::VulkanDescriptorResources::resolve;
         VkDescriptorBufferInfo buffer0[]={{input0->handle(),0,VK_WHOLE_SIZE},{output0->handle(),0,256}};
         VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};write.dstSet=logical0;write.dstBinding=0;write.descriptorCount=2;write.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;write.pBufferInfo=buffer0;
-        updates.update(1,&write,0,nullptr);auto cpu0=updates.snapshot(logical0,A::IndexAndInit);auto native0=adapter.materialize(cpu0,resolve);
+        VkDescriptorUpdateTemplateEntry entry{0,0,2,VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,1,32};
+        VkDescriptorUpdateTemplateCreateInfo templateInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_UPDATE_TEMPLATE_CREATE_INFO};templateInfo.templateType=VK_DESCRIPTOR_UPDATE_TEMPLATE_TYPE_DESCRIPTOR_SET;templateInfo.descriptorSetLayout=reinterpret_cast<VkDescriptorSetLayout>(uintptr_t(0x7003));templateInfo.descriptorUpdateEntryCount=1;templateInfo.pDescriptorUpdateEntries=&entry;
+        auto descriptorTemplate=updates.compileTemplate(logical0,templateInfo);
+        auto templateUpdate=[&](VkDescriptorSet set,const VkDescriptorBufferInfo* info){std::vector<unsigned char> data(descriptorTemplate.requiredBytes());for(size_t i=0;i<2;i++)std::memcpy(data.data()+1+32*i,&info[i],sizeof(info[i]));updates.updateWithTemplate(set,descriptorTemplate,data.data(),data.size());};
+        if(templates)templateUpdate(logical0,buffer0);else updates.update(1,&write,0,nullptr);
+        auto cpu0=updates.snapshot(logical0,A::IndexAndInit);auto native0=adapter.materialize(cpu0,resolve);
         auto allocated=context.counters().totalAllocations;if(adapter.materialize(cpu0,resolve)!=native0||context.counters().totalAllocations!=allocated)throw std::runtime_error("native generation cache allocated");
         auto record=[&](mavk::CommandBatch& commands,const std::shared_ptr<mavk::compat::NativeDescriptorSnapshot>& descriptors){commands.begin();vkCmdBindPipeline(commands.handle(),VK_PIPELINE_BIND_POINT_COMPUTE,pipeline.handle());vkCmdBindDescriptorSets(commands.handle(),VK_PIPELINE_BIND_POINT_COMPUTE,descriptors->pipelineLayout(),0,2,descriptors->sets().data(),0,nullptr);vkCmdDispatch(commands.handle(),1,1,1);commands.hostReadBarrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,VK_ACCESS_SHADER_WRITE_BIT);commands.end();};
         record(first,native0);
@@ -27,7 +32,8 @@ std::string descriptorGenerationGate(const std::vector<uint32_t>& code,bool vali
         // recorded dispatch executes. No set referenced by first is updated.
         VkDescriptorBufferInfo buffer1[]={{input1->handle(),0,VK_WHOLE_SIZE},{output1->handle(),0,256}};write.dstSet=logical1;write.pBufferInfo=buffer1;
         VkCopyDescriptorSet copy{VK_STRUCTURE_TYPE_COPY_DESCRIPTOR_SET};copy.srcSet=logical1;copy.srcBinding=0;copy.dstSet=logical0;copy.dstBinding=0;copy.descriptorCount=2;
-        updates.update(1,&write,1,&copy);auto cpu1=updates.snapshot(logical0,A::IndexAndInit);auto native1=adapter.materialize(cpu1,resolve);record(second,native1);
+        if(templates){templateUpdate(logical1,buffer1);updates.update(0,nullptr,1,&copy);}else updates.update(1,&write,1,&copy);
+        auto cpu1=updates.snapshot(logical0,A::IndexAndInit);auto native1=adapter.materialize(cpu1,resolve);record(second,native1);
         if(native0->sets()[0]==native1->sets()[0]||native0->sets()[1]==native1->sets()[1])throw std::runtime_error("native generations alias descriptor sets");
         unsigned negatives=0;auto reject=[&](auto f){auto before=context.counters().totalAllocations;try{f();}catch(const std::invalid_argument&){if(context.counters().totalAllocations!=before)throw std::runtime_error("rejected materialization allocated");negatives++;return;}throw std::runtime_error("bad native descriptor accepted");};
         reject([&]{adapter.materialize(updates.snapshot(logical0,A::BufferRanges),resolve);});adapter.invalidateResolverCache();
@@ -47,5 +53,6 @@ std::string descriptorGenerationGate(const std::vector<uint32_t>& code,bool vali
         if(adapter.counters().poolCreates!=2||adapter.counters().metadataUploads!=2||adapter.counters().updates!=2||negatives!=3)throw std::runtime_error("native generation gate coverage");
     }
     if(!context.counters().empty())throw std::runtime_error("native generation Core leaks");
-    return "{\"result\":\"NATIVE_DESCRIPTOR_GENERATIONS_PASS\",\"device\":"+quote(root.properties.deviceName)+",\"verified_words\":128,\"generations\":2,\"native_pool_creates\":2,\"native_metadata_uploads\":2,\"native_updates\":2,\"negative_tests\":3,\"record_before_submit\":true,\"resource_lease_retirement\":true,\"snapshot_cache_reused\":true,\"native_descriptor_adapter\":true,\"vulkan_descriptor_updates\":true,\"api_write_structures\":2,\"api_copy_structures\":1,\"core_live_zero\":true,\"scope\":\"Standard Vulkan write/copy structs drive two native generations via shared frontend+registry;resource release retained through GPU completion. Private frontend,NOT loader interception,public nullDescriptor/full Vulkan API,DXVK or performance PASS.\"}";
+    std::string templateFields=templates?",\"vulkan_descriptor_templates\":true,\"api_template_updates\":2,\"api_template_entries\":1,\"template_required_bytes\":57":"";
+    return "{\"result\":\"NATIVE_DESCRIPTOR_GENERATIONS_PASS\",\"device\":"+quote(root.properties.deviceName)+",\"verified_words\":128,\"generations\":2,\"native_pool_creates\":2,\"native_metadata_uploads\":2,\"native_updates\":2,\"negative_tests\":3,\"record_before_submit\":true,\"resource_lease_retirement\":true,\"snapshot_cache_reused\":true,\"native_descriptor_adapter\":true,\"vulkan_descriptor_updates\":true,\"api_write_structures\":"+(templates?"0":"2")+",\"api_copy_structures\":1,\"core_live_zero\":true"+templateFields+",\"scope\":\"Standard Vulkan write/copy or template structs drive two native generations via shared frontend+registry;resource release retained through GPU completion. Private frontend,NOT loader interception,public nullDescriptor/full Vulkan API,DXVK or performance PASS.\"}";
 }

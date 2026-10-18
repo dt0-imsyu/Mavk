@@ -76,6 +76,18 @@ private:
 // the native driver. NativeDescriptorAdapter emits the actual driver sets.
 class VulkanDescriptorUpdates {
 public:
+    // Compiled template owns only schema/offsets,not caller pointers or a set.
+    // The future loader layer resolves VkDescriptorSetLayout ownership before
+    // supplying a representative logical set with that exact layout.
+    class UpdateTemplate {
+    public:
+        size_t requiredBytes() const{return required_;}
+    private:
+        friend class VulkanDescriptorUpdates;
+        std::map<uint32_t,VkDescriptorSetLayoutBinding> bindings_;
+        std::vector<VkDescriptorUpdateTemplateEntry> entries_;
+        size_t required_=0;
+    };
     VulkanDescriptorUpdates(VulkanDescriptorResources& resources,DescriptorLimits limits={},bool experimentalNullWrites=false):resources_(resources),limits_(limits),allowNull_(experimentalNullWrites){}
     void registerSet(VkDescriptorSet set,const VkDescriptorSetLayoutCreateInfo& layout){
         if(!set||sets_.count(descriptor_api::key(set))||layout.sType!=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO||layout.pNext||layout.flags||!layout.bindingCount||layout.bindingCount>1024||!layout.pBindings)
@@ -89,6 +101,42 @@ public:
     void unregisterSet(VkDescriptorSet set){if(!sets_.erase(descriptor_api::key(set)))throw std::invalid_argument("unknown descriptor set");}
     std::shared_ptr<const DescriptorSnapshot> snapshot(VkDescriptorSet set,GuardMetadataAbi abi) const {
         const auto& record=find(set);for(const auto& b:record.bindings)for(uint32_t i=0;i<b.second.descriptorCount;i++)if(!VulkanDescriptorResources::alive(record.state->value(0,b.first,i)))throw std::invalid_argument("undefined descriptor references destroyed resource");return record.state->snapshot(abi);
+    }
+    UpdateTemplate compileTemplate(VkDescriptorSet representative,const VkDescriptorUpdateTemplateCreateInfo& info) const {
+        if(info.sType!=VK_STRUCTURE_TYPE_DESCRIPTOR_UPDATE_TEMPLATE_CREATE_INFO||info.pNext||info.flags||info.templateType!=VK_DESCRIPTOR_UPDATE_TEMPLATE_TYPE_DESCRIPTOR_SET||!info.descriptorSetLayout||!info.descriptorUpdateEntryCount||info.descriptorUpdateEntryCount>4096||!info.pDescriptorUpdateEntries)
+            throw std::invalid_argument("UNSUPPORTED descriptor update template");
+        const auto& set=find(representative);UpdateTemplate out;out.bindings_=set.bindings;size_t total=0;
+        for(uint32_t n=0;n<info.descriptorUpdateEntryCount;n++){
+            auto entry=info.pDescriptorUpdateEntries[n];auto kind=descriptor_api::kind(entry.descriptorType);
+            span(set,entry.dstBinding,entry.dstArrayElement,entry.descriptorCount,entry.descriptorType);
+            if(entry.descriptorCount>65536-total)throw std::invalid_argument("template descriptor budget");total+=entry.descriptorCount;
+            size_t bytes=kind==DescriptorKind::UniformBuffer||kind==DescriptorKind::StorageBuffer?sizeof(VkDescriptorBufferInfo):sizeof(VkDescriptorImageInfo);
+            constexpr size_t limit=16*1024*1024;
+            if(entry.offset>limit-bytes||(entry.descriptorCount>1&&entry.stride>(limit-entry.offset-bytes)/(entry.descriptorCount-1)))throw std::invalid_argument("template source extent/overflow");
+            out.required_=std::max(out.required_,entry.offset+entry.stride*(entry.descriptorCount-1)+bytes);out.entries_.push_back(entry);
+        }
+        return out;
+    }
+    // Bounded counterpart of vkUpdateDescriptorSetWithTemplate. Source may be
+    // unaligned/interleaved; memcpy avoids typed alias/alignment assumptions.
+    // Expand first,then reuse the existing whole-call transactional update path.
+    void updateWithTemplate(VkDescriptorSet set,const UpdateTemplate& descriptorTemplate,const void* data,size_t dataBytes){
+        const auto& bindings=find(set).bindings;
+        if(descriptorTemplate.entries_.empty()||bindings.size()!=descriptorTemplate.bindings_.size())throw std::invalid_argument("template/layout mismatch");
+        auto a=bindings.begin(),b=descriptorTemplate.bindings_.begin();
+        for(;a!=bindings.end();++a,++b)if(a->first!=b->first||a->second.descriptorType!=b->second.descriptorType||a->second.descriptorCount!=b->second.descriptorCount||a->second.stageFlags!=b->second.stageFlags)
+            throw std::invalid_argument("template/layout mismatch");
+        if(!data||dataBytes<descriptorTemplate.required_)throw std::invalid_argument("template source bytes missing");
+        std::vector<VkWriteDescriptorSet> writes(descriptorTemplate.entries_.size());
+        std::vector<std::vector<VkDescriptorBufferInfo>> buffers(writes.size());std::vector<std::vector<VkDescriptorImageInfo>> images(writes.size());
+        auto source=static_cast<const unsigned char*>(data);
+        for(size_t n=0;n<writes.size();n++){
+            const auto& e=descriptorTemplate.entries_[n];auto kind=descriptor_api::kind(e.descriptorType);auto& w=writes[n];
+            w.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;w.dstSet=set;w.dstBinding=e.dstBinding;w.dstArrayElement=e.dstArrayElement;w.descriptorType=e.descriptorType;w.descriptorCount=e.descriptorCount;
+            if(kind==DescriptorKind::UniformBuffer||kind==DescriptorKind::StorageBuffer){buffers[n].resize(e.descriptorCount);for(uint32_t i=0;i<e.descriptorCount;i++)std::memcpy(&buffers[n][i],source+e.offset+e.stride*i,sizeof(VkDescriptorBufferInfo));w.pBufferInfo=buffers[n].data();}
+            else{images[n].resize(e.descriptorCount);for(uint32_t i=0;i<e.descriptorCount;i++)std::memcpy(&images[n][i],source+e.offset+e.stride*i,sizeof(VkDescriptorImageInfo));w.pImageInfo=images[n].data();}
+        }
+        update(uint32_t(writes.size()),writes.data(),0,nullptr);
     }
     // Writes in array order,then copies in array order. Whole call is staged;
     // rejection cannot leave some logical sets partially updated.

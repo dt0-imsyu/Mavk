@@ -25,6 +25,9 @@ public releases are authorized by that instruction. Preserve remote license.
 - [x] Bounded Vulkan-structure update/copy frontend and trusted resource registry;
       ordered transactional writes/copies,consecutive bindings,resource retirement.
       Not loader exports or full Vulkan update-after-bind semantics.
+- [x] Descriptor update-template expansion required by Sarek:owned schema,
+      bounded interleaved source,transactional reuse;CPU13/18 and actual two
+      recorded GPU generations128words PASS,SyncVal0/0. No loader interception.
 - [x] Same portable guard compiler in host CLI and Android runtime with bounded
       immutable-result LRU;actual original SPIR-V ->on-device compile ->Mali
       atomic/null/range gate PASS1536words/1024guards,SyncVal0/0. Vulkan1.1/set0

@@ -19,6 +19,7 @@ public final class CoreComparisonActivity extends Activity {
     static native String runNullAtomics(byte[] shader,String report,boolean validation);
     static native String runRuntimeNullAtomics(byte[] shader,String report,boolean validation);
     static native String runDescriptorGenerations(byte[] shader,String report,boolean validation);
+    static native String runDescriptorTemplates(byte[] shader,String report,boolean validation);
     static native String runReuse(byte[] vertex,byte[] fragment,String report,boolean validation);
     static native String runRaster(byte[] vertex,byte[] fragment,String report,boolean validation);
     static native String runUi(byte[] vertex,byte[] fragment,String report,boolean validation);
@@ -38,6 +39,10 @@ public final class CoreComparisonActivity extends Activity {
                 if(getIntent().getBooleanExtra("runtimeGuards",false)){
                     try(java.io.InputStream shader=getAssets().open("null-atomics.original.spv")){
                         result=runRuntimeNullAtomics(shader.readAllBytes(),new File(getFilesDir(),"core-null-atomics.json").getAbsolutePath(),getIntent().getBooleanExtra("validation",false));
+                    }
+                }else if(getIntent().getBooleanExtra("descriptorTemplates",false)){
+                    try(java.io.InputStream shader=getAssets().open("descriptor-generation.comp.spv")){
+                        result=runDescriptorTemplates(shader.readAllBytes(),new File(getFilesDir(),"core-descriptor-generations.json").getAbsolutePath(),getIntent().getBooleanExtra("validation",false));
                     }
                 }else if(getIntent().getBooleanExtra("descriptorGenerations",false)){
                     try(java.io.InputStream shader=getAssets().open("descriptor-generation.comp.spv")){

@@ -1,8 +1,11 @@
 #version 450
+#ifndef MAVK_CONSTANT_SET
+#define MAVK_CONSTANT_SET 0
+#endif
 layout(local_size_x=64) in;
 layout(set=0,binding=0,std430) buffer Data { uint value[128]; } dataBuffer[2];
 layout(set=0,binding=1,std430) buffer Results { uint value[512]; } resultBuffer;
-layout(set=0,binding=2,std140) uniform Constants { uvec4 value; } constants[2];
+layout(set=MAVK_CONSTANT_SET,binding=2,std140) uniform Constants { uvec4 value; } constants[2];
 void main(){
     uint i=gl_GlobalInvocationID.x;
     uint absent=dataBuffer[0].value[i],present=dataBuffer[1].value[i];

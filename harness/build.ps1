@@ -79,6 +79,10 @@ foreach($shader in @('sampled.vert','sampled.frag','sampled-scene.vert','sampled
     & "$ndk/shader-tools/windows-x86_64/glslc.exe" --target-env=vulkan1.1 "$PSScriptRoot/shaders/$shader" -o "$out/payload/assets/$shader.spv"
     Checked "$shader sampled image test"
 }
+if($GuardCompilerBuild){
+    & "$ndk/shader-tools/windows-x86_64/glslc.exe" --target-env=vulkan1.1 -DMAVK_CONSTANT_SET=1 "$PSScriptRoot/shaders/null-atomics.comp" -o "$out/payload/assets/null-atomics.multiset.original.spv"
+    Checked 'multiset original shader'
+}
 & "$ndk/toolchains/llvm/prebuilt/windows-x86_64/bin/clang++.exe" --target=aarch64-linux-android29 -std=c++17 -O2 -g -Wall -Wextra -Wno-missing-field-initializers -Werror -fPIC -I "$PSScriptRoot/../core/include" -c "$PSScriptRoot/../core/src/core.cpp" -o "$out/core.o"
 Checked 'Core compilation'
 & "$ndk/toolchains/llvm/prebuilt/windows-x86_64/bin/llvm-ar.exe" rcs "$out/libmavk_core.a" "$out/core.o"

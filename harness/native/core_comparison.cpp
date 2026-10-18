@@ -306,22 +306,23 @@ extern "C" JNIEXPORT jstring JNICALL Java_org_mavk_probe_CoreComparisonActivity_
     result.insert(result.rfind('}'),validation.fields());const char* path=env->GetStringUTFChars(destination,nullptr);{std::ofstream f(path);f<<result;if(!f)result="REPORT_WRITE_FAILED";}env->ReleaseStringUTFChars(destination,path);return env->NewStringUTF(result.c_str());
 }
 
-extern "C" JNIEXPORT jstring JNICALL Java_org_mavk_probe_CoreComparisonActivity_runRuntimeNullAtomics(JNIEnv* env,jclass,jbyteArray input,jstring destination,jboolean validated){
+extern "C" JNIEXPORT jstring JNICALL Java_org_mavk_probe_CoreComparisonActivity_runRuntimeNullAtomics(JNIEnv* env,jclass,jbyteArray input,jstring destination,jboolean validated,jboolean multiSet){
     ValidationCapture validation;std::string result;
     try{
 #ifdef MAVK_RUNTIME_GUARDS
         jsize bytes=env->GetArrayLength(input);if(bytes<20||bytes>65536||bytes%4)throw std::runtime_error("runtime original shader bytes");
         std::vector<uint32_t> words(bytes/4);env->GetByteArrayRegion(input,0,bytes,reinterpret_cast<jbyte*>(words.data()));
-        mavk::compat::GuardCompiler compiler;auto begin=Clock::now();auto guarded=compiler.compile(words);auto compiled=Clock::now();auto warm=compiler.compile(words);auto reused=Clock::now();
+        mavk::compat::GuardCompiler compiler(16,8*1024*1024,{multiSet?3u:1u});auto begin=Clock::now();auto guarded=compiler.compile(words);auto compiled=Clock::now();auto warm=compiler.compile(words);auto reused=Clock::now();
         auto stats=compiler.stats();if(warm!=guarded||stats.compiled!=1||stats.hits!=1||stats.entries!=1)throw std::runtime_error("runtime guard cache mismatch");
         unsigned rejected=0;auto reject=[&](const std::vector<uint32_t>& bad){try{compiler.compile(bad);}catch(const std::exception&){rejected++;return;}throw std::runtime_error("invalid runtime shader admitted");};
         reject({});auto bad=words;bad[0]=0;reject(bad);bad=words;bad.push_back(0);reject(bad);reject(*guarded);
         if(compiler.stats().compiled!=1||compiler.stats().retainedBytes!=stats.retainedBytes)throw std::runtime_error("rejected shader changed cache");
-        result=nullBuffersGate(*guarded,validated,validation,true);
+        result=nullBuffersGate(*guarded,validated,validation,true,multiSet);
         std::ostringstream fields;fields<<",\"runtime_guard_compiler\":true,\"guard_compile_ms\":"<<ms(begin,compiled)<<",\"guard_cache_ms\":"<<ms(compiled,reused)<<",\"guard_cache_hit\":true,\"guard_compilations\":1,\"guard_rejections\":"<<rejected<<",\"original_shader_bytes\":"<<bytes<<",\"guarded_shader_bytes\":"<<guarded->size()*4;
+        if(multiSet)fields<<",\"public_descriptor_sets\":3,\"guard_descriptor_set\":3,\"empty_public_sets\":1,\"vulkan_descriptor_bindings\":true,\"bound_public_sets\":2";
         result.insert(result.rfind('}'),fields.str());if(validation.errors.load()||validation.warnings.load())throw std::runtime_error("runtime guards validation errors/warnings");
 #else
-        (void)input;(void)validated;throw std::runtime_error("runtime guard compiler not built");
+        (void)input;(void)validated;(void)multiSet;throw std::runtime_error("runtime guard compiler not built");
 #endif
     }catch(const std::exception& e){result="{\"result\":\"FAIL\",\"error\":"+quote(e.what())+"}";}
     result.insert(result.rfind('}'),validation.fields());const char* path=env->GetStringUTFChars(destination,nullptr);{std::ofstream f(path);f<<result;if(!f)result="REPORT_WRITE_FAILED";}env->ReleaseStringUTFChars(destination,path);return env->NewStringUTF(result.c_str());

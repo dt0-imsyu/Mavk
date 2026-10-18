@@ -4,8 +4,8 @@
 #include <string>
 
 namespace mavk::compat {
-GuardCompiler::GuardCompiler(size_t entries,size_t bytes):maxEntries_(entries),maxBytes_(bytes){
-    if(!entries||entries>256||bytes<1024||bytes>64*1024*1024)throw std::invalid_argument("guard cache limits");
+GuardCompiler::GuardCompiler(size_t entries,size_t bytes,GuardCompilerOptions options):maxEntries_(entries),maxBytes_(bytes),publicSets_(options.publicSetCount){
+    if(!entries||entries>256||bytes<1024||bytes>64*1024*1024||!publicSets_||publicSets_>7)throw std::invalid_argument("guard cache/set limits");
 }
 GuardCompilerStats GuardCompiler::stats() const{return {compiled_,hits_,cache_.size(),retained_};}
 std::shared_ptr<const GuardCompiler::Words> GuardCompiler::compile(const Words& code){
@@ -13,7 +13,7 @@ std::shared_ptr<const GuardCompiler::Words> GuardCompiler::compile(const Words& 
     for(auto at=cache_.begin();at!=cache_.end();++at)if(at->original==code){auto result=at->guarded;cache_.splice(cache_.begin(),cache_,at);hits_++;return result;}
     for(size_t p=5;p<code.size();){
         auto count=code[p]>>16,op=code[p]&65535;if(!count||p+count>code.size())throw std::invalid_argument("malformed SPIR-V instruction");
-        if(op==71&&count==4&&code[p+2]==34&&code[p+3]!=0)throw std::invalid_argument("original set0 only;metadata set1 reserved");
+        if(op==71&&count==4&&code[p+2]==34&&code[p+3]>=publicSets_)throw std::invalid_argument("descriptor set outside public range or private metadata collision");
         if(op==60||op==67||op==70||op==120||op==318||op==319||op==5614||op==5615||op==6035)throw std::invalid_argument("unsupported pointer/image/flag/float-atomic access form");
         p+=count;
     }
@@ -22,7 +22,7 @@ std::shared_ptr<const GuardCompiler::Words> GuardCompiler::compile(const Words& 
     spvtools::SpirvTools validator(SPV_ENV_VULKAN_1_1);validator.SetMessageConsumer(consumer);
     if(!validator.Validate(code))throw std::invalid_argument("input SPIR-V invalid: "+diagnostics);
     spvtools::Optimizer optimizer(SPV_ENV_VULKAN_1_1);optimizer.SetMessageConsumer(consumer);
-    optimizer.RegisterPass(spvtools::CreateInstBindlessCheckPass(1,23,true,true,true,true));
+    optimizer.RegisterPass(spvtools::CreateInstBindlessCheckPass(publicSets_,23,true,true,true,true));
     optimizer.RegisterPass(spvtools::CreateSimplificationPass());
     optimizer.RegisterPass(spvtools::CreateDeadBranchElimPass());
     optimizer.RegisterPass(spvtools::CreateBlockMergePass());

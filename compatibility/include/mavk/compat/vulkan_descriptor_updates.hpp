@@ -102,6 +102,28 @@ public:
     std::shared_ptr<const DescriptorSnapshot> snapshot(VkDescriptorSet set,GuardMetadataAbi abi) const {
         const auto& record=find(set);for(const auto& b:record.bindings)for(uint32_t i=0;i<b.second.descriptorCount;i++)if(!VulkanDescriptorResources::alive(record.state->value(0,b.first,i)))throw std::invalid_argument("undefined descriptor references destroyed resource");return record.state->snapshot(abi);
     }
+    // Pipeline-bound logical sets ->one immutable metadata/resource generation.
+    // Null positions are empty public sets,NOT logically null descriptors.
+    // The pipeline adapter still verifies the exact complete binding schema.
+    std::shared_ptr<const DescriptorSnapshot> snapshotBindings(const std::vector<VkDescriptorSet>& bound,GuardMetadataAbi abi){
+        if(bound.empty()||bound.size()>7)throw std::invalid_argument("bound public set count");
+        std::vector<std::shared_ptr<const DescriptorSnapshot>> sources;for(auto set:bound)sources.push_back(set?snapshot(set,abi):nullptr);
+        bool cached=bound==boundKeys_&&abi==boundAbi_&&sources.size()==boundSources_.size();
+        if(cached)for(size_t i=0;i<sources.size();i++)if(sources[i]!=boundSources_[i].lock()){cached=false;break;}
+        if(cached)if(auto result=boundCache_.lock())return result;
+        std::vector<DescriptorBinding> bindings;
+        for(uint32_t set=0;set<sources.size();set++)if(sources[set])for(auto binding:sources[set]->bindings){binding.set=set;bindings.push_back(binding);}
+        DescriptorState state(std::move(bindings),limits_);
+        for(uint32_t set=0;set<sources.size();set++)if(sources[set])for(size_t row=0;row<sources[set]->bindings.size();row++){
+            const auto& binding=sources[set]->bindings[row];for(uint32_t i=0;i<binding.count;i++){
+                const auto& value=sources[set]->values[row][i];
+                if(value.status==DescriptorStatus::Null)state.setNull(set,binding.binding,i,value.owner);
+                else if(binding.kind==DescriptorKind::UniformBuffer||binding.kind==DescriptorKind::StorageBuffer)state.bindBuffer(set,binding.binding,i,value.owner,value.offset+value.range,value.offset,value.range);
+                else state.bindImage(set,binding.binding,i,value.owner);
+            }
+        }
+        auto result=state.snapshot(abi);boundKeys_=bound;boundAbi_=abi;boundSources_.assign(sources.begin(),sources.end());boundCache_=result;return result;
+    }
     UpdateTemplate compileTemplate(VkDescriptorSet representative,const VkDescriptorUpdateTemplateCreateInfo& info) const {
         if(info.sType!=VK_STRUCTURE_TYPE_DESCRIPTOR_UPDATE_TEMPLATE_CREATE_INFO||info.pNext||info.flags||info.templateType!=VK_DESCRIPTOR_UPDATE_TEMPLATE_TYPE_DESCRIPTOR_SET||!info.descriptorSetLayout||!info.descriptorUpdateEntryCount||info.descriptorUpdateEntryCount>4096||!info.pDescriptorUpdateEntries)
             throw std::invalid_argument("UNSUPPORTED descriptor update template");
@@ -188,5 +210,8 @@ private:
     }
     VulkanDescriptorResources& resources_;DescriptorLimits limits_;bool allowNull_;
     std::map<uint64_t,std::shared_ptr<Set>> sets_;
+    std::vector<VkDescriptorSet> boundKeys_;GuardMetadataAbi boundAbi_{};
+    std::vector<std::weak_ptr<const DescriptorSnapshot>> boundSources_;
+    std::weak_ptr<const DescriptorSnapshot> boundCache_;
 };
 }

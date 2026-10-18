@@ -8,6 +8,7 @@ parser.add_argument("report", type=pathlib.Path)
 parser.add_argument("--atomics", action="store_true")
 parser.add_argument("--shared-state", action="store_true")
 parser.add_argument("--runtime-compiler", action="store_true")
+parser.add_argument("--multi-sets", action="store_true")
 args = parser.parse_args()
 report = json.loads(args.report.read_text(encoding="utf-8"))
 expected = {
@@ -41,6 +42,11 @@ if args.runtime_compiler:
         value = report.get(field)
         if type(value) not in (int, float) or not 0 <= value < 30000:
             raise SystemExit(f"FAIL: compiler timing {field}")
+if args.multi_sets:
+    if not args.runtime_compiler:
+        raise SystemExit("FAIL: multiset gate requires runtime compiler")
+    expected.update(public_descriptor_sets=3,guard_descriptor_set=3,empty_public_sets=1,
+                    vulkan_descriptor_bindings=True,bound_public_sets=2)
 for key, value in expected.items():
     actual = report.get(key)
     if type(actual) is not type(value) or actual != value:

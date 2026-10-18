@@ -7,11 +7,17 @@ Android-specific lifecycle,ICD loader hook or driver replacement is introduced.
 
 ## Contract
 
-- Currently one public set0 +guard set1,no dynamic descriptors,push constants,
+- Public sets followed by one guard set,no dynamic descriptors,push constants,
   immutable sampler bindings,update-after-bind,variable descriptor count or full
   VkDescriptor API. Kind/stage visibility and explicit shader metadata ABI are
   fixed at adapter construction. Descriptor layout mismatch/ABI mismatch rejects
-  before allocations. Native Vulkan limits still apply.
+  before allocations. Native Vulkan limits still apply. Public count is inferred
+  from the highest populated set unless explicitly supplied as the fifth
+  constructor argument. It must be1..7 and include all bindings; public count+1
+  must fit actual maxBoundDescriptorSets. Holes/trailing public sets get empty
+  native layouts. `guardSetIndex()` must match GuardCompilerOptions.
+  Snapshot `sets()` now returns a vector of all public sets plus the guard set;
+  callers bind its actual size,not a hard-coded2. Default set0 remains2total.
 - Caller supplies a resolver for actual owned resources and **typed** null
   fallbacks. There is no universal dummy image: shader format/dimension/sample
   admission/reflection and fallback cache remain higher-level work. Every
@@ -19,7 +25,7 @@ Android-specific lifecycle,ICD loader hook or driver replacement is introduced.
   Buffer offsets/ranges/alignments and native type limits are checked before
   native allocations; bound buffer metadata must match the native descriptor.
 - Each changed CPU snapshot materializes an independent descriptor pool,public
-  set,guard set,immutable metadata allocation and diagnostic log. It never
+  sets,guard set,immutable metadata allocation and diagnostic log. It never
   mutates sets belonging to an older snapshot. Resources/fallback leases,CPU
   metadata and native layouts remain owned by that native snapshot.
 - Repeated materialization of the cached CPU generation returns the same native

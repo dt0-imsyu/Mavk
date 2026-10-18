@@ -4,9 +4,11 @@
 CLI and Android adapters. `tool.cpp` is only a file-input/output frontend.
 The implementation links the public SPIRV-Tools Optimizer API, enabling descriptor-index,
 descriptor-init, buffer-range and texel-buffer checks in **one** pass. Metadata
-is set1, bindings0(log)/1(input). Unlike stacking CLI passes, this does not
-re-instrument another pass's generated metadata/debug resources. Only original
-set0 is currently accepted. Outputs must validate for Vulkan1.1.
+uses bindings0(log)/1(input) in one private set. Unlike stacking CLI passes,
+this does not re-instrument another pass's generated metadata/debug resources.
+The default CLI accepts only original set0 and reserves set1. Native callers
+can configure public sets before the private guard set. Outputs must validate
+for Vulkan1.1.
 
 External dependency: KhronosGroup/SPIRV-Tools **v2022.4**, commit
 `eb0a36633d2acf4de82588504f951ad0f2cecacb`; SPIRV-Headers from its DEPS,
@@ -56,8 +58,13 @@ already-proven buffer/image gates and rejects atomics. It is not the new tool.
 `GuardCompiler::compile` accepts an original word vector and returns immutable
 shared ownership of validated guarded words. Both input and output are validated
 for Vulkan1.1; this is not yet a general Vulkan1.2/1.3 DXVK shader compiler.
-Only original set0 is admitted; private set1 and IndexAndInit metadata ABI are
-fixed. Unsupported forms reject rather than being silently passed through.
+`GuardCompilerOptions::publicSetCount` is immutable for each compiler/cache,
+defaults to1,and supports1..7 public sets. Public indices must be below this
+count; the private guard set index equals the count (`guardSetIndex()`). Caller
+must reserve the same index in NativeDescriptorAdapter and respect actual
+maxBoundDescriptorSets. There is no automatic native-capability or pipeline
+layout negotiation. IndexAndInit metadata ABI remains fixed. Unsupported forms
+reject rather than being silently passed through.
 The opcode filter is deliberately not an exhaustive feature-admission boundary.
 
 Callers serialize access. The bounded LRU defaults to16 entries/8MiB of retained

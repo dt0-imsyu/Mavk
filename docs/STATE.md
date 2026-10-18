@@ -2,6 +2,18 @@
 
 ## Active development — shared Compatibility, Windows preserved
 
+2026-10-18 multi-set shader/descriptor consumer building blocks actual PASS.
+Sarek dxvk_pipelayout.h separates GpViews0/GpBuffers1; fixed private set1 was a
+real conflict. GuardCompiler now reserves configurable private set after1..7
+public sets;native adapter emits matching layouts/sets and checks device limit.
+Common frontend snapshotBindings composes ordinary logical-set writes with weak
+cache,immutable resource leases and empty public positions. Actual Mali original
+shader ->device compiler ->VkWrite structs ->set0SSBO/set1UBO/empty2/private3 ->
+GPU PASS1536words/1024guards,SyncVal0/0/Corezero. Single-set and descriptor-template
+regressions PASS on same APK. Compiler CPU14/9,bound composition18/6,template13/18.
+Hashes/scope:docs/MULTI_SET_CONSUMER_2026-10-18.md. No feature bits or DXVK/device
+success claim;loader hooks,remaining descriptor/shader semantics still OPEN.
+
 2026-10-18 descriptor update templates actual PASS. Sarek calls this API;
 common frontend now owns/validates entry schema and bounded offset/stride source,
 then uses existing transactional updates and resource leases. CPU13checks/18

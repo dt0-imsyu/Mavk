@@ -28,10 +28,33 @@ guards. This does NOT advertise nullDescriptor, robustness2 or partially-bound.
 
 Explicitly unsupported: extension chains, immutable samplers, sampler-only,
 texel/dynamic descriptors, descriptor buffers/indexing/update-after-bind,
-multiple public sets in the native materializer, automatic shader/layout
+automatic shader/layout
 admission and loader dispatch. Full Vulkan command-buffer invalidation and
 pending-update rules are not implemented here. Immutable backend generations
 are NOT a promise of legal public Vulkan update-after-bind behavior.
+
+## Bound-set composition
+
+`snapshotBindings(logicalSets,abi)` composes registered logical sets into the
+public pipeline indices implied by the vector,then generates the common guard
+metadata and retains real resource leases. Each logical set's local bindings
+remain unchanged. Null vector positions denote empty/unused public sets,not
+null descriptors. Up to7positions are accepted; all-empty or unresolved/unwritten
+sets reject. The native materializer checks the complete expected binding schema,
+so omitting a required public set cannot silently produce a usable generation.
+
+Same keys/source snapshots/ABI reuse a live composed snapshot. Cached source and
+result references are weak,so the binder cannot keep retired resources alive
+after logical sets and GPU snapshots are released. Resource destruction is
+checked before cache reuse. Reordered or changed sets produce a different
+snapshot; previous results stay immutable. Snapshot generation values are local
+to the composition,not a global monotonic counter; native caches use identity.
+This is not vkCmdBindDescriptorSets interception,pipeline compatibility tracking,
+dynamic offsets or legal update-after-bind support.
+
+CPU gate `test/bound-descriptors.cpp`:18checks/6rejections PASS,including source
+reordering,duplicate binding,holes,logical nulls,old snapshots and weak-cache
+resource retirement. Native evidence is recorded in docs/STATE.md.
 
 CPU gate: `test/vulkan-descriptor-updates.cpp`, 16 assertions and 16 rejections.
 Native lifetime gate consumes real VkWrite/VkCopy structures, then submits two

@@ -30,8 +30,11 @@ public releases are authorized by that instruction. Preserve remote license.
       recorded GPU generations128words PASS,SyncVal0/0. No loader interception.
 - [x] Same portable guard compiler in host CLI and Android runtime with bounded
       immutable-result LRU;actual original SPIR-V ->on-device compile ->Mali
-      atomic/null/range gate PASS1536words/1024guards,SyncVal0/0. Vulkan1.1/set0
+      atomic/null/range gate PASS1536words/1024guards,SyncVal0/0. Vulkan1.1
       experimental ABI only,not exhaustive shader admission/full consumer hooks.
+- [x] Multiple public sets +configurable private guard set;logical Vulkan-set
+      composition/cache/leases ->native layouts,actual Mali SSBO0/UBO1/empty2/
+      guard3 PASS1536words/1024guards,SyncVal0/0. No loader binding interception.
 - [ ] Full Vulkan image/format/view/subresource adapter, execution-time integration.
 - [ ] Correct null images/texel buffers/arrays/atomics and required robustness2.
 - [ ] Actual Vulkan device +D3D11CreateDevice +swapchain +correct first frame.

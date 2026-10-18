@@ -17,7 +17,7 @@ public final class CoreComparisonActivity extends Activity {
     static native String runNullBuffers(byte[] shader,String report,boolean validation);
     static native String runNullImages(byte[] shader,String report,boolean validation);
     static native String runNullAtomics(byte[] shader,String report,boolean validation);
-    static native String runRuntimeNullAtomics(byte[] shader,String report,boolean validation);
+    static native String runRuntimeNullAtomics(byte[] shader,String report,boolean validation,boolean multiSet);
     static native String runDescriptorGenerations(byte[] shader,String report,boolean validation);
     static native String runDescriptorTemplates(byte[] shader,String report,boolean validation);
     static native String runReuse(byte[] vertex,byte[] fragment,String report,boolean validation);
@@ -36,9 +36,10 @@ public final class CoreComparisonActivity extends Activity {
         new Thread(() -> {
             String result;
             try {
-                if(getIntent().getBooleanExtra("runtimeGuards",false)){
-                    try(java.io.InputStream shader=getAssets().open("null-atomics.original.spv")){
-                        result=runRuntimeNullAtomics(shader.readAllBytes(),new File(getFilesDir(),"core-null-atomics.json").getAbsolutePath(),getIntent().getBooleanExtra("validation",false));
+                if(getIntent().getBooleanExtra("runtimeGuards",false)||getIntent().getBooleanExtra("runtimeMultiSets",false)){
+                    boolean multiSet=getIntent().getBooleanExtra("runtimeMultiSets",false);
+                    try(java.io.InputStream shader=getAssets().open(multiSet?"null-atomics.multiset.original.spv":"null-atomics.original.spv")){
+                        result=runRuntimeNullAtomics(shader.readAllBytes(),new File(getFilesDir(),"core-null-atomics.json").getAbsolutePath(),getIntent().getBooleanExtra("validation",false),multiSet);
                     }
                 }else if(getIntent().getBooleanExtra("descriptorTemplates",false)){
                     try(java.io.InputStream shader=getAssets().open("descriptor-generation.comp.spv")){

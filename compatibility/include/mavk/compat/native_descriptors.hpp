@@ -26,7 +26,7 @@ inline VkDescriptorType type(DescriptorKind k){switch(k){
     case DescriptorKind::StorageImage:return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
 }throw std::invalid_argument("native descriptor kind");}
 struct Layouts {
-    VkDevice device{};std::vector<DescriptorBinding> bindings;VkDescriptorSetLayout sets[2]{};VkPipelineLayout pipeline{};
+    VkDevice device{};std::vector<DescriptorBinding> bindings;std::vector<VkDescriptorSetLayout> sets;VkPipelineLayout pipeline{};
     VkPhysicalDeviceLimits limits{};std::shared_ptr<NativeDescriptorCounters> counters=std::make_shared<NativeDescriptorCounters>();
     ~Layouts(){if(pipeline)vkDestroyPipelineLayout(device,pipeline,nullptr);for(auto s:sets)if(s)vkDestroyDescriptorSetLayout(device,s,nullptr);}
 };
@@ -37,7 +37,7 @@ class NativeDescriptorSnapshot {
 public:
     NativeDescriptorSnapshot(const NativeDescriptorSnapshot&)=delete;
     ~NativeDescriptorSnapshot(){if(pool_)vkDestroyDescriptorPool(layouts_->device,pool_,nullptr);if(counted_)layouts_->counters->liveSnapshots--;}
-    const std::array<VkDescriptorSet,2>& sets() const{return sets_;}
+    const std::vector<VkDescriptorSet>& sets() const{return sets_;}
     VkPipelineLayout pipelineLayout() const{return layouts_->pipeline;}
     const DescriptorSnapshot& cpu() const{return *cpu_;}
     // Caller must have completed GPU use before host read/reset of diagnostics.
@@ -47,31 +47,37 @@ private:
     NativeDescriptorSnapshot(std::shared_ptr<descriptor_detail::Layouts> layouts,std::shared_ptr<const DescriptorSnapshot> cpu):layouts_(std::move(layouts)),cpu_(std::move(cpu)){}
     std::shared_ptr<descriptor_detail::Layouts> layouts_;std::shared_ptr<const DescriptorSnapshot> cpu_;
     std::vector<NativeDescriptorResource> resources_;std::unique_ptr<mavk::Buffer> metadata_,log_;
-    VkDescriptorPool pool_{};std::array<VkDescriptorSet,2> sets_{};bool counted_=false;
+    VkDescriptorPool pool_{};std::vector<VkDescriptorSet> sets_;bool counted_=false;
 };
 // Bounded native backend API,not a loader layer or complete VkDescriptor API.
-// One public set0 and private guard set1; caller supplies real shader/layout
+// Public sets followed by one private guard set; caller supplies real shader/layout
 // admission and typed fallbacks. Serialized/external queue synchronization.
 class NativeDescriptorAdapter {
 public:
     using Resolver=std::function<NativeDescriptorResource(const DescriptorBinding&,uint32_t,const DescriptorValue&)>;
-    NativeDescriptorAdapter(mavk::DeviceContext& context,std::vector<DescriptorBinding> bindings,GuardMetadataAbi abi,VkShaderStageFlags stages=VK_SHADER_STAGE_COMPUTE_BIT):context_(context),layouts_(std::make_shared<descriptor_detail::Layouts>()),abi_(abi){
+    NativeDescriptorAdapter(mavk::DeviceContext& context,std::vector<DescriptorBinding> bindings,GuardMetadataAbi abi,VkShaderStageFlags stages=VK_SHADER_STAGE_COMPUTE_BIT,uint32_t publicSetCount=0):context_(context),layouts_(std::make_shared<descriptor_detail::Layouts>()),abi_(abi){
         // Reuse common layout validation before any native resource creation.
         DescriptorState validated(bindings);(void)validated;
         if(abi!=GuardMetadataAbi::BufferRanges&&abi!=GuardMetadataAbi::IndexAndInit)throw std::invalid_argument("native shader metadata ABI");
-        std::sort(bindings.begin(),bindings.end(),[](const auto& a,const auto& b){return a.binding<b.binding;});
-        for(const auto& b:bindings)if(b.set!=0)throw std::invalid_argument("native adapter currently supports public set0 only");
+        std::sort(bindings.begin(),bindings.end(),[](const auto& a,const auto& b){return a.set<b.set||(a.set==b.set&&a.binding<b.binding);});
+        if(!publicSetCount)publicSetCount=bindings.back().set+1;
+        if(publicSetCount>7||bindings.back().set>=publicSetCount)throw std::invalid_argument("native public descriptor set count");
         if(!stages)throw std::invalid_argument("native descriptor stage visibility");
         layouts_->device=context.vkDevice();layouts_->bindings=std::move(bindings);
         VkPhysicalDeviceProperties properties;vkGetPhysicalDeviceProperties(context.physicalDevice(),&properties);layouts_->limits=properties.limits;
-        if(properties.limits.maxBoundDescriptorSets<2)throw std::runtime_error("guard descriptor set unavailable");
-        std::vector<VkDescriptorSetLayoutBinding> native;for(const auto& b:layouts_->bindings)native.push_back({b.binding,descriptor_detail::type(b.kind),b.count,stages,nullptr});
-        VkDescriptorSetLayoutCreateInfo create{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};create.bindingCount=uint32_t(native.size());create.pBindings=native.data();descriptor_detail::check(vkCreateDescriptorSetLayout(layouts_->device,&create,nullptr,&layouts_->sets[0]),"native public descriptor layout");
+        if(properties.limits.maxBoundDescriptorSets<publicSetCount+1)throw std::runtime_error("guard descriptor set unavailable");
+        layouts_->sets.resize(publicSetCount+1,VK_NULL_HANDLE);
+        VkDescriptorSetLayoutCreateInfo create{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+        for(uint32_t set=0;set<publicSetCount;set++){
+            std::vector<VkDescriptorSetLayoutBinding> native;for(const auto& b:layouts_->bindings)if(b.set==set)native.push_back({b.binding,descriptor_detail::type(b.kind),b.count,stages,nullptr});
+            create.bindingCount=uint32_t(native.size());create.pBindings=native.data();descriptor_detail::check(vkCreateDescriptorSetLayout(layouts_->device,&create,nullptr,&layouts_->sets[set]),"native public descriptor layout");
+        }
         VkDescriptorSetLayoutBinding guards[]={{0,VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,1,stages,nullptr},{1,VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,1,stages,nullptr}};
-        create.bindingCount=2;create.pBindings=guards;descriptor_detail::check(vkCreateDescriptorSetLayout(layouts_->device,&create,nullptr,&layouts_->sets[1]),"native guard descriptor layout");
-        VkPipelineLayoutCreateInfo pipeline{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};pipeline.setLayoutCount=2;pipeline.pSetLayouts=layouts_->sets;descriptor_detail::check(vkCreatePipelineLayout(layouts_->device,&pipeline,nullptr,&layouts_->pipeline),"native descriptor pipeline layout");
+        create.bindingCount=2;create.pBindings=guards;descriptor_detail::check(vkCreateDescriptorSetLayout(layouts_->device,&create,nullptr,&layouts_->sets.back()),"native guard descriptor layout");
+        VkPipelineLayoutCreateInfo pipeline{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};pipeline.setLayoutCount=uint32_t(layouts_->sets.size());pipeline.pSetLayouts=layouts_->sets.data();descriptor_detail::check(vkCreatePipelineLayout(layouts_->device,&pipeline,nullptr,&layouts_->pipeline),"native descriptor pipeline layout");
     }
     VkPipelineLayout pipelineLayout() const{return layouts_->pipeline;}
+    uint32_t guardSetIndex() const{return uint32_t(layouts_->sets.size()-1);}
     NativeDescriptorCounters counters() const{return *layouts_->counters;}
     // Resolver/resource mapping must remain stable for a CPU generation. If a
     // caller replaces its typed fallback mapping,explicitly drop this weak key.
@@ -112,15 +118,16 @@ public:
         result->log_=std::make_unique<mavk::Buffer>(context_,32768,VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,host,coherent);std::memset(result->log_->map(),0,32768);result->log_->flush();
         std::vector<VkDescriptorPoolSize> sizes{{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,2}};
         for(const auto& b:layouts_->bindings){auto type=descriptor_detail::type(b.kind);auto at=std::find_if(sizes.begin(),sizes.end(),[&](const auto& s){return s.type==type;});if(at==sizes.end())sizes.push_back({type,b.count});else at->descriptorCount+=b.count;}
-        VkDescriptorPoolCreateInfo pool{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};pool.maxSets=2;pool.poolSizeCount=uint32_t(sizes.size());pool.pPoolSizes=sizes.data();descriptor_detail::check(vkCreateDescriptorPool(layouts_->device,&pool,nullptr,&result->pool_),"native descriptor pool");
-        VkDescriptorSetAllocateInfo allocate{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};allocate.descriptorPool=result->pool_;allocate.descriptorSetCount=2;allocate.pSetLayouts=layouts_->sets;descriptor_detail::check(vkAllocateDescriptorSets(layouts_->device,&allocate,result->sets_.data()),"native descriptor sets");
+        result->sets_.resize(layouts_->sets.size(),VK_NULL_HANDLE);
+        VkDescriptorPoolCreateInfo pool{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};pool.maxSets=uint32_t(result->sets_.size());pool.poolSizeCount=uint32_t(sizes.size());pool.pPoolSizes=sizes.data();descriptor_detail::check(vkCreateDescriptorPool(layouts_->device,&pool,nullptr,&result->pool_),"native descriptor pool");
+        VkDescriptorSetAllocateInfo allocate{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};allocate.descriptorPool=result->pool_;allocate.descriptorSetCount=uint32_t(result->sets_.size());allocate.pSetLayouts=layouts_->sets.data();descriptor_detail::check(vkAllocateDescriptorSets(layouts_->device,&allocate,result->sets_.data()),"native descriptor sets");
         std::vector<VkWriteDescriptorSet> writes;size_t index=0;
         for(const auto& b:layouts_->bindings)for(uint32_t i=0;i<b.count;i++,index++){
-            VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};write.dstSet=result->sets_[0];write.dstBinding=b.binding;write.dstArrayElement=i;write.descriptorCount=1;write.descriptorType=descriptor_detail::type(b.kind);
+            VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};write.dstSet=result->sets_[b.set];write.dstBinding=b.binding;write.dstArrayElement=i;write.descriptorCount=1;write.descriptorType=descriptor_detail::type(b.kind);
             if(b.kind==DescriptorKind::UniformBuffer||b.kind==DescriptorKind::StorageBuffer)write.pBufferInfo=&result->resources_[index].buffer;else write.pImageInfo=&result->resources_[index].image;writes.push_back(write);
         }
         VkDescriptorBufferInfo guards[]={{result->log_->handle(),0,result->log_->size()},{result->metadata_->handle(),0,result->metadata_->size()}};
-        for(uint32_t i=0;i<2;i++){VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};write.dstSet=result->sets_[1];write.dstBinding=i;write.descriptorCount=1;write.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;write.pBufferInfo=&guards[i];writes.push_back(write);}
+        for(uint32_t i=0;i<2;i++){VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};write.dstSet=result->sets_.back();write.dstBinding=i;write.descriptorCount=1;write.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;write.pBufferInfo=&guards[i];writes.push_back(write);}
         vkUpdateDescriptorSets(layouts_->device,uint32_t(writes.size()),writes.data(),0,nullptr);
         auto& count=*layouts_->counters;count.poolCreates++;count.metadataUploads++;count.updates++;count.liveSnapshots++;result->counted_=true;cache_=result;return result;
     }

@@ -6,19 +6,22 @@
 #include <vector>
 
 namespace mavk::compat {
-// Fixed experimental ABI: original set0,private set1,IndexAndInit metadata.
+// Experimental ABI: public sets [0,count),private set count,IndexAndInit metadata.
 // Not exhaustive shader admission or a Vulkan robustness feature declaration.
 // Serialized callers only. Returned immutable words survive cache eviction.
 struct GuardCompilerStats {uint64_t compiled=0,hits=0;size_t entries=0,retainedBytes=0;};
+struct GuardCompilerOptions {uint32_t publicSetCount=1;};
 class GuardCompiler {
 public:
     using Words=std::vector<uint32_t>;
-    explicit GuardCompiler(size_t maxEntries=16,size_t maxBytes=8*1024*1024);
+    explicit GuardCompiler(size_t maxEntries=16,size_t maxBytes=8*1024*1024,GuardCompilerOptions options={});
     std::shared_ptr<const Words> compile(const Words&);
     GuardCompilerStats stats() const;
+    uint32_t guardSetIndex() const{return publicSets_;}
 private:
     struct Entry {Words original;std::shared_ptr<const Words> guarded;size_t bytes;};
     size_t maxEntries_,maxBytes_,retained_=0;uint64_t compiled_=0,hits_=0;
+    uint32_t publicSets_=1;
     std::list<Entry> cache_;
 };
 }

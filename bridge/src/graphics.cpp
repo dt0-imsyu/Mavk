@@ -36,7 +36,7 @@ struct Graphics {
     std::unique_ptr<Image> depth;std::unique_ptr<Buffer> vertices,indices,uniform;
     std::unique_ptr<SampledImage> texture;
     VkDescriptorSetLayout descriptorLayout{};VkDescriptorPool descriptorPool{};VkDescriptorSet descriptor{};
-    std::unique_ptr<Shader> vs,fs;std::unique_ptr<Pipeline> pipeline;
+    std::unique_ptr<Shader> vs,fs,gs,tcs,tes;std::unique_ptr<Pipeline> pipeline;
     std::unique_ptr<CommandBatch> commands;std::unique_ptr<Fence> fence;
     explicit Graphics(DeviceContext& context):c(context){}
     ~Graphics(){
@@ -93,7 +93,7 @@ struct Graphics {
         if(uniforms||sampled||uploaded){
             std::vector<VkDescriptorSetLayoutBinding> bindings;
             std::vector<VkDescriptorPoolSize> sizes;
-            if(uniforms){bindings.push_back({0,VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,1,VK_SHADER_STAGE_VERTEX_BIT,nullptr});sizes.push_back({VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,1});}
+            if(uniforms){bindings.push_back({0,VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,1,raster?raster->uniformStages:VkShaderStageFlags(VK_SHADER_STAGE_VERTEX_BIT),nullptr});sizes.push_back({VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,1});}
             if(sampled||uploaded){bindings.push_back({sampledBinding,VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,1,VK_SHADER_STAGE_FRAGMENT_BIT,nullptr});sizes.push_back({VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,1});}
             VkDescriptorSetLayoutCreateInfo dl{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};dl.bindingCount=uint32_t(bindings.size());dl.pBindings=bindings.data();check(vkCreateDescriptorSetLayout(d,&dl,nullptr,&descriptorLayout));
             VkDescriptorPoolCreateInfo dp{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};dp.maxSets=1;dp.poolSizeCount=uint32_t(sizes.size());dp.pPoolSizes=sizes.data();check(vkCreateDescriptorPool(d,&dp,nullptr,&descriptorPool));
@@ -106,7 +106,18 @@ struct Graphics {
         }
         VkPushConstantRange push{pushStages,0,pushBytes};VkPipelineLayoutCreateInfo pl{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};pl.pushConstantRangeCount=pushBytes?1:0;pl.pPushConstantRanges=pushBytes?&push:nullptr;pl.setLayoutCount=(uniforms||sampled||uploaded)?1:0;pl.pSetLayouts=(uniforms||sampled||uploaded)?&descriptorLayout:nullptr;check(vkCreatePipelineLayout(d,&pl,nullptr,&layout));
         vs=std::make_unique<Shader>(c,vert,vertBytes);fs=std::make_unique<Shader>(c,frag,fragBytes);
-        VkPipelineShaderStageCreateInfo stages[2]{};for(auto& s:stages){s.sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;s.pName="main";}stages[0].stage=VK_SHADER_STAGE_VERTEX_BIT;stages[0].module=vs->handle();stages[1].stage=VK_SHADER_STAGE_FRAGMENT_BIT;stages[1].module=fs->handle();
+        VkPipelineShaderStageCreateInfo stages[5]{};for(auto& s:stages){s.sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;s.pName="main";}stages[0].stage=VK_SHADER_STAGE_VERTEX_BIT;stages[0].module=vs->handle();stages[1].stage=VK_SHADER_STAGE_FRAGMENT_BIT;stages[1].module=fs->handle();uint32_t stageCount=2;
+        if(raster&&(!raster->tessellationControlShader.empty()||!raster->tessellationEvaluationShader.empty())){
+            VkPhysicalDeviceProperties properties{};vkGetPhysicalDeviceProperties(c.physicalDevice(),&properties);
+            if(raster->tessellationControlShader.size()<5||raster->tessellationControlShader.size()>262144||raster->tessellationEvaluationShader.size()<5||raster->tessellationEvaluationShader.size()>262144||!raster->patchControlPoints||raster->patchControlPoints>properties.limits.maxTessellationPatchSize)throw std::invalid_argument("bounded native tessellation shader pair required");
+            tcs=std::make_unique<Shader>(c,raster->tessellationControlShader.data(),raster->tessellationControlShader.size()*4);tes=std::make_unique<Shader>(c,raster->tessellationEvaluationShader.data(),raster->tessellationEvaluationShader.size()*4);
+            stages[stageCount].stage=VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;stages[stageCount++].module=tcs->handle();stages[stageCount].stage=VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;stages[stageCount++].module=tes->handle();
+        }
+        if(raster&&!raster->geometryShader.empty()){
+            if(raster->geometryShader.size()<5||raster->geometryShader.size()>262144)throw std::invalid_argument("bounded native geometry shader required");
+            gs=std::make_unique<Shader>(c,raster->geometryShader.data(),raster->geometryShader.size()*4);
+            stages[stageCount].stage=VK_SHADER_STAGE_GEOMETRY_BIT;stages[stageCount++].module=gs->handle();
+        }
         VkPipelineVertexInputStateCreateInfo vi{VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
         VkVertexInputBindingDescription binding{};
         if(geometry){
@@ -119,7 +130,8 @@ struct Graphics {
                 std::memcpy(indices->map(),geometry->indices.data(),geometry->indices.size());indices->flush();
             }
         }
-        VkPipelineInputAssemblyStateCreateInfo ia{VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};ia.topology=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        VkPipelineInputAssemblyStateCreateInfo ia{VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};ia.topology=tes?VK_PRIMITIVE_TOPOLOGY_PATCH_LIST:VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        VkPipelineTessellationStateCreateInfo tessellation{VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO};tessellation.patchControlPoints=raster?raster->patchControlPoints:3;
         VkViewport vp{0,0,float(w),float(h),0,1};VkRect2D scissor{{0,0},{w,h}};VkPipelineViewportStateCreateInfo viewport{VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};viewport.viewportCount=1;viewport.pViewports=&vp;viewport.scissorCount=1;viewport.pScissors=&scissor;
         VkPipelineRasterizationStateCreateInfo rs{VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};rs.polygonMode=VK_POLYGON_MODE_FILL;rs.cullMode=scene?scene->cull:VkCullModeFlags(VK_CULL_MODE_NONE);rs.frontFace=scene?scene->front:VK_FRONT_FACE_COUNTER_CLOCKWISE;rs.lineWidth=1;
         VkPipelineMultisampleStateCreateInfo ms{VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};ms.rasterizationSamples=VK_SAMPLE_COUNT_1_BIT;
@@ -128,7 +140,7 @@ struct Graphics {
         if(raster&&raster->uiOverlayAlpha){blend.blendEnable=VK_TRUE;blend.srcColorBlendFactor=VK_BLEND_FACTOR_SRC_ALPHA;blend.dstColorBlendFactor=VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;blend.colorBlendOp=VK_BLEND_OP_ADD;blend.srcAlphaBlendFactor=VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;blend.dstAlphaBlendFactor=VK_BLEND_FACTOR_ZERO;blend.alphaBlendOp=VK_BLEND_OP_ADD;}
         VkDynamicState dynamicStates[]={VK_DYNAMIC_STATE_SCISSOR,VK_DYNAMIC_STATE_VIEWPORT};VkPipelineDynamicStateCreateInfo dynamic{VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};dynamic.dynamicStateCount=2;dynamic.pDynamicStates=dynamicStates;
         VkPipelineDepthStencilStateCreateInfo depthState{VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};depthState.depthTestEnable=useDepth;depthState.depthWriteEnable=useDepth;depthState.depthCompareOp=VK_COMPARE_OP_LESS_OR_EQUAL;
-        VkGraphicsPipelineCreateInfo gp{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};gp.stageCount=2;gp.pStages=stages;gp.pVertexInputState=&vi;gp.pInputAssemblyState=&ia;gp.pViewportState=&viewport;gp.pRasterizationState=&rs;gp.pMultisampleState=&ms;gp.pColorBlendState=&cb;gp.pDepthStencilState=useDepth?&depthState:nullptr;gp.pDynamicState=&dynamic;gp.layout=layout;gp.renderPass=pass;
+        VkGraphicsPipelineCreateInfo gp{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};gp.stageCount=stageCount;gp.pStages=stages;gp.pVertexInputState=&vi;gp.pInputAssemblyState=&ia;gp.pTessellationState=tes?&tessellation:nullptr;gp.pViewportState=&viewport;gp.pRasterizationState=&rs;gp.pMultisampleState=&ms;gp.pColorBlendState=&cb;gp.pDepthStencilState=useDepth?&depthState:nullptr;gp.pDynamicState=&dynamic;gp.layout=layout;gp.renderPass=pass;
         auto pipelineStart=timing?CpuClock::now():CpuClock::time_point{};pipeline=std::make_unique<Pipeline>(c,gp);if(timing)timing->pipelineCreateMs=elapsedCpu(pipelineStart);
         commands=std::make_unique<CommandBatch>(c);fence=std::make_unique<Fence>(c);
     }

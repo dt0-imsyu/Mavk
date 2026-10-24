@@ -28,7 +28,15 @@ std::string nullTexelsGate(const std::vector<uint32_t>& original,bool validated,
         VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};info.bindingCount=3;info.pBindings=bindings;updates.registerSet(logical,info);
         mavk::compat::NativeDescriptorAdapter adapter(context,{{0,0,2,K::UniformTexelBuffer},{0,1,2,K::StorageTexelBuffer},{0,2,1,K::StorageBuffer}},A::IndexAndInit);
         mavk::Shader shader(context,code->data(),code->size()*4);VkComputePipelineCreateInfo pc{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};pc.layout=adapter.pipelineLayout();pc.stage={VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};pc.stage.stage=VK_SHADER_STAGE_COMPUTE_BIT;pc.stage.module=shader.handle();pc.stage.pName="main";mavk::Pipeline pipeline(context,pc);mavk::CommandBatch commands(context);mavk::Fence fence(context);
-        auto resolve=[&](const auto& binding,uint32_t index,const auto& value){if(value.status==mavk::compat::DescriptorStatus::Bound)return mavk::compat::VulkanDescriptorResources::resolve(binding,index,value);auto owner=binding.kind==K::UniformTexelBuffer?(index?sampled1:sampled0):(index?storage1:storage0);mavk::compat::NativeDescriptorResource r;r.owner=owner;r.texelView=owner->view;r.texelElements=64;return r;};
+        auto formats=mavk::compat::reflectTexelFormats(original);
+        if(formats.size()!=2||formats.at({0,0})!=VK_FORMAT_R32_UINT||formats.at({0,1})!=VK_FORMAT_R32_UINT)throw std::runtime_error("actual texel shader reflection mismatch");
+        mavk::compat::NullTexelResources nullTexels(context);std::shared_ptr<const void> nullLease;VkBufferView nullView{};
+        auto resolve=[&](const auto& binding,uint32_t index,const auto& value){
+            if(value.status==mavk::compat::DescriptorStatus::Bound)return mavk::compat::VulkanDescriptorResources::resolve(binding,index,value);
+            auto r=nullTexels.resolve(binding,value,formats.at({binding.set,binding.binding}));
+            if(nullLease&&(r.owner!=nullLease||r.texelView!=nullView))throw std::runtime_error("null texel typed cache/lifetime changed");
+            nullLease=r.owner;nullView=r.texelView;return r;
+        };
         for(unsigned phase=0;phase<2;phase++){
             for(auto owner:{sampled0,sampled1,storage0,storage1}){auto data=static_cast<uint32_t*>(owner->buffer->map());for(unsigned i=0;i<128;i++)data[i]=(owner==sampled0?0x1000:owner==sampled1?0x2000:owner==storage0?0x3000:0x4000)+i;owner->buffer->flush();}std::memset(o,0xCC,3072);output->flush();
             VkBufferView sampled[]={phase?sampled0->view:VK_NULL_HANDLE,phase?VK_NULL_HANDLE:sampled1->view},storage[]={phase?storage0->view:VK_NULL_HANDLE,phase?VK_NULL_HANDLE:storage1->view};VkDescriptorBufferInfo outputInfo{output->handle(),0,3072};VkWriteDescriptorSet writes[3]{};for(auto& w:writes){w.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;w.dstSet=logical;w.descriptorCount=2;}

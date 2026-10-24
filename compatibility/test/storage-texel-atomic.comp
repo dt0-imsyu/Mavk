@@ -1,0 +1,20 @@
+#version 450
+layout(local_size_x=1) in;
+layout(r32ui,set=0,binding=0) coherent uniform uimageBuffer target;
+layout(set=0,binding=1,std430) buffer Results {uint value[4];} result;
+#ifdef BOUNDS_PHASES
+layout(push_constant) uniform Parameters {uint phase;} parameters;
+#endif
+void main(){
+#ifdef BOUNDS_PHASES
+    int a=parameters.phase==1?17:parameters.phase==2?-1:0;
+    int b=parameters.phase==1?18:parameters.phase==2?-2:1;
+    int c=parameters.phase==1?19:parameters.phase==2?-3:2;
+#else
+    int a=0,b=1,c=2;
+#endif
+    result.value[0]=imageAtomicAdd(target,a,1u);
+    result.value[1]=imageAtomicExchange(target,b,0x5A17C0DEu);
+    result.value[2]=imageAtomicCompSwap(target,a,0xA5000001u,0xBEEFu);
+    result.value[3]=imageAtomicAdd(target,c,0u);
+}

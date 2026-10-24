@@ -1,0 +1,16 @@
+diff --git a/src/compositor.c b/src/compositor.c
+--- a/src/compositor.c
++++ b/src/compositor.c
+@@ -3132,2 +3132,12 @@
+     if (n < 3) return;
++    if (!strcmp(cmd, "output")) {
++        const char *rt = getenv("XDG_RUNTIME_DIR"), suffix[] = "/mavk-window/run";
++        const size_t len = rt ? strlen(rt) : 0;
++        if (len < sizeof(suffix)-1 || strcmp(rt+len-(sizeof(suffix)-1), suffix)) return;
++        if (!(x >= 320 && x <= 4096 && y >= 240 && y <= 4096)) return;
++        if (x != (int)x || y != (int)y || (uint64_t)(int)x*(int)y > 8388608) return;
++        g_output_w = (int)x; g_output_h = (int)y;
++        output_resized();
++        return;
++    }
+     if (!strcmp(cmd, "move")) pointer_event(x, y, 0, 0);

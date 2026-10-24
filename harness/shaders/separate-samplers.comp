@@ -1,0 +1,13 @@
+#version 450
+layout(local_size_x=64) in;
+layout(set=0,binding=0) uniform texture2D images[2];
+layout(set=1,binding=0) uniform sampler filters[2];
+layout(set=0,binding=1,std430) buffer Results { vec4 values[256]; } result;
+void main(){
+    uint i=gl_GlobalInvocationID.x;
+    vec2 uv=(vec2(i%8,i/8)+vec2(0.75))/8.0;
+    result.values[4*i]=textureLod(sampler2D(images[0],filters[0]),uv,0.0);
+    result.values[4*i+1]=textureLod(sampler2D(images[0],filters[1]),uv,0.0);
+    result.values[4*i+2]=textureLod(sampler2D(images[1],filters[0]),uv,0.0);
+    result.values[4*i+3]=textureLod(sampler2D(images[1],filters[1]),uv,0.0);
+}

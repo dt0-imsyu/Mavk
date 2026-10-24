@@ -1,0 +1,78 @@
+--- a/source/opt/inst_bindless_check_pass.cpp
++++ b/source/opt/inst_bindless_check_pass.cpp
+@@ -556,7 +556,8 @@
+ void InstBindlessCheckPass::GenCheckCode(
+     uint32_t check_id, uint32_t error_id, uint32_t offset_id,
+     uint32_t length_id, uint32_t stage_idx, RefAnalysis* ref,
+-    std::vector<std::unique_ptr<BasicBlock>>* new_blocks) {
++    std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
++    uint32_t invalid_value_id) {
+   BasicBlock* back_blk_ptr = &*new_blocks->back();
+   InstructionBuilder builder(
+       context(), back_blk_ptr,
+@@ -617,7 +618,8 @@
+   // reference.
+   if (new_ref_id != 0) {
+     Instruction* phi_inst = builder.AddPhi(
+-        ref_type_id, {new_ref_id, valid_blk_id, GetNullId(ref_type_id),
++        ref_type_id, {new_ref_id, valid_blk_id,
++                      invalid_value_id ? invalid_value_id : GetNullId(ref_type_id),
+                       last_invalid_blk_id});
+     context()->ReplaceAllUsesWith(ref->ref_inst->result_id(),
+                                   phi_inst->result_id());
+@@ -825,8 +827,42 @@
+           ? kInstErrorBuffOOBStorageTexel
+           : kInstErrorBuffOOBUniformTexel;
+   uint32_t error_id = builder.GetUintConstantId(error);
++  // Format component substitution applies to OOB texels, not null descriptors.
++  uint32_t invalid_value_id = 0;
++  if (!atomic && op != SpvOpImageWrite) {
++    const auto format = image_ty_inst->GetSingleWordInOperand(6);
++    bool alpha_one = false;
++    switch (format) {
++      case SpvImageFormatR32f: case SpvImageFormatRg32f:
++      case SpvImageFormatRg16f: case SpvImageFormatR11fG11fB10f:
++      case SpvImageFormatR16f: case SpvImageFormatRg16:
++      case SpvImageFormatRg8: case SpvImageFormatR16: case SpvImageFormatR8:
++      case SpvImageFormatRg16Snorm: case SpvImageFormatRg8Snorm:
++      case SpvImageFormatR16Snorm: case SpvImageFormatR8Snorm:
++      case SpvImageFormatR32i: case SpvImageFormatRg32i:
++      case SpvImageFormatRg16i: case SpvImageFormatRg8i:
++      case SpvImageFormatR16i: case SpvImageFormatR8i:
++      case SpvImageFormatR32ui: case SpvImageFormatRg32ui:
++      case SpvImageFormatRg16ui: case SpvImageFormatRg8ui:
++      case SpvImageFormatR16ui: case SpvImageFormatR8ui:
++        alpha_one = true; break;
++      default: break;
++    }
++    if (alpha_one) {
++      auto* vector = context()->get_type_mgr()->GetType(ref_inst->type_id())->AsVector();
++      if (vector && vector->element_count() == 4) {
++        const auto scalar_id = get_def_use_mgr()->GetDef(ref_inst->type_id())->GetSingleWordInOperand(0);
++        const auto zero_id = GetNullId(scalar_id);
++        const auto one_bits = vector->element_type()->AsFloat() ? 0x3f800000u : 1u;
++        const auto* one = context()->get_constant_mgr()->GetConstant(vector->element_type(), {one_bits});
++        const auto one_id = context()->get_constant_mgr()->GetDefiningInstruction(one)->result_id();
++        invalid_value_id = builder.AddCompositeConstruct(ref_inst->type_id(),
++            {zero_id, zero_id, zero_id, one_id})->result_id();
++      }
++    }
++  }
+   GenCheckCode(ult_inst->result_id(), error_id, coord_id, size_id, stage_idx,
+-               &ref, new_blocks);
++               &ref, new_blocks, invalid_value_id);
+   // Move original block's remaining code into remainder/merge block and add
+   // to new blocks
+   BasicBlock* back_blk_ptr = &*new_blocks->back();
+--- a/source/opt/inst_bindless_check_pass.h
++++ b/source/opt/inst_bindless_check_pass.h
+@@ -176,7 +176,8 @@
+   // original reference.
+   void GenCheckCode(uint32_t check_id, uint32_t error_id, uint32_t offset_id,
+                     uint32_t length_id, uint32_t stage_idx, RefAnalysis* ref,
+-                    std::vector<std::unique_ptr<BasicBlock>>* new_blocks);
++                    std::vector<std::unique_ptr<BasicBlock>>* new_blocks,
++                    uint32_t invalid_value_id = 0);
+ 
+   // Initialize state for instrumenting bindless checking
+   void InitializeInstBindlessCheck();

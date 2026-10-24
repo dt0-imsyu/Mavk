@@ -1,0 +1,33 @@
+diff --git a/src/gallium/drivers/zink/zink_draw.cpp b/src/gallium/drivers/zink/zink_draw.cpp
+index 30b5af4..6f1d6be 100644
+--- a/src/gallium/drivers/zink/zink_draw.cpp
++++ b/src/gallium/drivers/zink/zink_draw.cpp
+@@ -146,6 +146,28 @@ zink_bind_vertex_buffers(struct zink_context *ctx)
+                                   elems->hw_state.num_bindings,
+                                   buffers, buffer_offsets);
+ 
++   static thread_local unsigned mavk_samples;
++   if (debug_get_bool_option("MAVK_TRACE_VERTEX_SNAPSHOT", false) && mavk_samples < 12) {
++      unsigned sample = mavk_samples++;
++      bool dynamic = zink_screen(ctx->base.screen)->info.have_EXT_vertex_input_dynamic_state;
++      fprintf(stderr, "MAVK_VK_VERTEX sample=%u state=%u dynamic_input=%u dynamic_stride=%u bindings=%u attributes=%u\n",
++              sample, (unsigned)DYNAMIC_STATE, dynamic, ctx->gfx_pipeline_state.uses_dynamic_stride,
++              elems->hw_state.num_bindings, elems->hw_state.num_attribs);
++      for (unsigned i = 0; i < elems->hw_state.num_bindings; i++)
++         fprintf(stderr, "MAVK_VK_BINDING sample=%u binding=%u offset=%llu source_stride=%llu pipeline_stride=%u\n",
++                 sample, i, (unsigned long long)buffer_offsets[i],
++                 (unsigned long long)(dynamic ? elems->hw_state.dynbindings[i].stride : elems->hw_state.b.strides[i]),
++                 dynamic ? elems->hw_state.dynbindings[i].stride : elems->hw_state.b.bindings[i].stride);
++      for (unsigned i = 0; i < elems->hw_state.num_attribs; i++) {
++         unsigned location = dynamic ? elems->hw_state.dynattribs[i].location : elems->hw_state.attribs[i].location;
++         unsigned binding = dynamic ? elems->hw_state.dynattribs[i].binding : elems->hw_state.attribs[i].binding;
++         unsigned format = dynamic ? elems->hw_state.dynattribs[i].format : elems->hw_state.attribs[i].format;
++         unsigned offset = dynamic ? elems->hw_state.dynattribs[i].offset : elems->hw_state.attribs[i].offset;
++         fprintf(stderr, "MAVK_VK_ATTRIBUTE sample=%u location=%u binding=%u format=%u offset=%u\n",
++                 sample, location, binding, format, offset);
++      }
++   }
++
+    ctx->vertex_buffers_dirty = false;
+ }
+ 

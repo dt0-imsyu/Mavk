@@ -1,8 +1,10 @@
 build/
+recovery/
 .gradle/
 .cxx/
 local.properties
 artifacts/
+artifacts-local/
 *.apk
 *.aab
 *.keystore

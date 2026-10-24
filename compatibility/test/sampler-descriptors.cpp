@@ -1,0 +1,18 @@
+#include <mavk/compat/vulkan_descriptor_updates.hpp>
+#include <iostream>
+using namespace mavk::compat;
+unsigned checks=0,negatives=0;
+void check(bool yes){checks++;if(!yes)throw std::runtime_error("sampler descriptor assertion");}
+template<class F>void reject(F f){try{f();}catch(const std::exception&){negatives++;return;}throw std::runtime_error("invalid sampler descriptor accepted");}
+template<class T>T handle(uintptr_t n){if constexpr(std::is_pointer_v<T>)return reinterpret_cast<T>(n);else return T(n);}
+int main(){try{
+    using K=DescriptorKind;using A=GuardMetadataAbi;auto owner=std::make_shared<int>(1);auto a=handle<VkSampler>(1),b=handle<VkSampler>(2);VulkanDescriptorResources resources;resources.registerSampler(a,owner);resources.registerSampler(b,owner);VulkanDescriptorUpdates updates(resources,{},true);auto one=handle<VkDescriptorSet>(10),two=handle<VkDescriptorSet>(11);
+    VkDescriptorSetLayoutBinding binding{0,VK_DESCRIPTOR_TYPE_SAMPLER,2,VK_SHADER_STAGE_COMPUTE_BIT,nullptr};VkDescriptorSetLayoutCreateInfo layout{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};layout.bindingCount=1;layout.pBindings=&binding;updates.registerSet(one,layout);updates.registerSet(two,layout);
+    VkDescriptorImageInfo infos[]={{a,VK_NULL_HANDLE,VK_IMAGE_LAYOUT_UNDEFINED},{b,VK_NULL_HANDLE,VK_IMAGE_LAYOUT_UNDEFINED}};VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};write.dstSet=one;write.descriptorCount=2;write.descriptorType=VK_DESCRIPTOR_TYPE_SAMPLER;write.pImageInfo=infos;updates.update(1,&write,0,nullptr);auto first=updates.snapshot(one,A::IndexAndInit);check(first->at(0,0,0).status==DescriptorStatus::Bound);check(first->at(0,0,1).range==1);check(VulkanDescriptorResources::resolve(first->bindings[0],1,first->at(0,0,1)).image.sampler==b);updates.update(1,&write,0,nullptr);check(first==updates.snapshot(one,A::IndexAndInit));
+    VkCopyDescriptorSet copy{VK_STRUCTURE_TYPE_COPY_DESCRIPTOR_SET};copy.srcSet=one;copy.dstSet=two;copy.descriptorCount=2;updates.update(0,nullptr,1,&copy);check(updates.snapshotBindings({one,two},A::IndexAndInit)->at(1,0,1).owner==first->at(0,0,1).owner);
+    VkDescriptorUpdateTemplateEntry entry{0,0,2,VK_DESCRIPTOR_TYPE_SAMPLER,1,32};VkDescriptorUpdateTemplateCreateInfo ci{VK_STRUCTURE_TYPE_DESCRIPTOR_UPDATE_TEMPLATE_CREATE_INFO};ci.templateType=VK_DESCRIPTOR_UPDATE_TEMPLATE_TYPE_DESCRIPTOR_SET;ci.descriptorSetLayout=handle<VkDescriptorSetLayout>(99);ci.descriptorUpdateEntryCount=1;ci.pDescriptorUpdateEntries=&entry;auto compiled=updates.compileTemplate(one,ci);std::vector<unsigned char> data(compiled.requiredBytes());for(size_t i=0;i<2;i++)std::memcpy(data.data()+1+32*i,&infos[i],sizeof(infos[i]));updates.updateWithTemplate(one,compiled,data.data(),data.size());check(first==updates.snapshot(one,A::IndexAndInit));
+    auto stable=first;infos[1].sampler=VK_NULL_HANDLE;reject([&]{updates.update(1,&write,0,nullptr);});check(updates.snapshot(one,A::IndexAndInit)==stable);infos[1].sampler=handle<VkSampler>(999);reject([&]{updates.update(1,&write,0,nullptr);});infos[1].sampler=b;
+    DescriptorState state({{0,0,1,K::Sampler}});reject([&]{state.setNull(0,0,0);});reject([&]{state.bindSampler(0,0,0,{});});reject([&]{state.bindImage(0,0,0,owner);});state.bindSampler(0,0,0,owner);check(state.snapshot(A::IndexAndInit)->at(0,0,0).range==1);
+    resources.unregisterSampler(a);reject([&]{updates.snapshotBindings({one,two},A::IndexAndInit);});check(first->at(0,0,0).owner!=nullptr);reject([&]{updates.updateWithTemplate(one,compiled,data.data(),data.size());});
+    std::cout<<"SAMPLER_DESCRIPTORS_PASS checks="<<checks<<" negatives="<<negatives<<'\n';return 0;
+}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

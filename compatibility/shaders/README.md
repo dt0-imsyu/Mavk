@@ -1,8 +1,27 @@
 # Experimental shared shader guards
 
+`spirv-tools-texel-components.patch` follows the atomic patch: OOB reads of
+known non-alpha storage-texel formats get typed(0,0,0,1); descriptor-null results
+stay zero. Unknown image formats still need runtime view-format information.
+R32_UINT GPU FAIL-before/PASS-after and25 bounded cases recorded in
+docs/TEXEL_COMPONENT_SUBSTITUTION_2026-10-22.md. Not full feature/CTS support.
+
+Latest bounded extension: `texel_atomics.hpp` plus
+`spirv-tools-texel-atomics.patch` (apply after existing buffer/texel patches).
+It instruments integer Buffer/R32i/R32ui image-pointer atomic references using
+descriptor initialization and view-size checks, preserving native atomics and
+memory operands. Unsupported pointer/dimension/format forms reject explicitly.
+R32_UINT compute GPU proof covers add/exchange/CAS/read, valid/OOB/negative/null/
+restored phases, 320 checked words. This is not all image atomics, full
+robustness2/nullDescriptor or CTS. See STORAGE_ATOMICS_NEXT_2026-10-21.md.
+Host test: `mavk-shader-guards-test --texel-atomic <original.spv>`;
+isolated GPU control: `storage-atomic-guarded-control.sh`.
+The current compiler supports explicitly selected Vulkan11/12/13 targets;
+historical Vulkan11-only descriptions below describe earlier checkpoints.
+
 `GuardCompiler` in `include/mavk/compat/shader_guards.hpp` is shared by the host
 CLI and Android adapters. `tool.cpp` is only a file-input/output frontend.
-The implementation links the public SPIRV-Tools Optimizer API, enabling descriptor-index,
+The implementation links the SPIRV-Tools Optimizer API, enabling descriptor-index,
 descriptor-init, buffer-range and texel-buffer checks in **one** pass. Metadata
 uses bindings0(log)/1(input) in one private set. Unlike stacking CLI passes,
 this does not re-instrument another pass's generated metadata/debug resources.
@@ -32,6 +51,16 @@ pointer analysis, buffer-overflow arithmetic, component-granular robustness2,
 all atomics, all shader stages/texture operations and production consumer/lifetime
 integration remain separate requirements. Debug logging still costs atomics
 on invalid accesses; no production overhead claim.
+
+`GuardCompilerOptions::reportErrors=false` retains guarded accesses and fallback
+results, but omits generated diagnostic-report calls using the pinned optimizer
+IR API. Only generated function IDs (above the original module bound) with the
+instrumenter's exact report-name prefix are eligible. Dead functions and unused
+entry-point interfaces are removed; a surviving private log binding rejects the
+module. Metadata binding1 stays active. This permits read-only vertex guards on
+devices without vertexPipelineStoresAndAtomics; it does not emulate application
+vertex stores/atomics or advertise that feature. Default reporting is unchanged.
+SPIR-V1.6 needs explicit unused-interface cleanup, unlike older fixtures.
 
 Build using SDK CMake/Ninja and host llvm-mingw (not Android target compiler):
 
@@ -83,3 +112,14 @@ The isolated harness's `runtimeGuards` intent compiles the original atomic shade
 on device,checks warm reuse and rejected inputs,then executes the existing
 null/buffer/range/atomic GPU gate. Acceptance requires the strict verifier's
 `--atomics --shared-state --runtime-compiler` options, not build success alone.
+
+## Runtime diagnostic policy
+
+`GuardCompilerOptions::reportErrors=false` retains access checks and zero/skip
+behavior but omits generated diagnostic writes. The CLI accepts `--no-reports`.
+The experimental layer can select this immutable per-device policy with
+`MAVK_GUARD_REPORTS=0`; feature queries and native stores/atomics bits are not
+changed. Reporting remains the default until the consumer A/B is verified.
+Use report-enabled GPU coverage oracles for access counts, and report-disabled
+pixel/live-write/null-write oracles to verify the quiet path. No-report operation
+is not a reason to weaken null semantics or advertise incomplete robustness2.

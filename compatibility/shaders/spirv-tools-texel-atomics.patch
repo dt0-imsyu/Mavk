@@ -1,0 +1,144 @@
+--- a/source/opt/inst_bindless_check_pass.cpp
++++ b/source/opt/inst_bindless_check_pass.cpp
+@@ -116,7 +116,16 @@
+     RefAnalysis* ref, InstructionBuilder* builder) {
+   // If original is image based, start by cloning descriptor load
+   uint32_t new_image_id = 0;
+-  if (ref->desc_load_id != 0) {
++  uint32_t new_texel_ptr_id = 0;
++  if (ref->image_texel_ptr_id != 0) {
++    Instruction* original = get_def_use_mgr()->GetDef(ref->image_texel_ptr_id);
++    std::unique_ptr<Instruction> pointer(original->Clone(context()));
++    new_texel_ptr_id = TakeNextId();
++    pointer->SetResultId(new_texel_ptr_id);
++    Instruction* added = builder->AddInstruction(std::move(pointer));
++    uid2offset_[added->unique_id()] = uid2offset_[original->unique_id()];
++    get_decoration_mgr()->CloneDecorations(original->result_id(), new_texel_ptr_id);
++  } else if (ref->desc_load_id != 0) {
+     uint32_t old_image_id =
+         ref->ref_inst->GetSingleWordInOperand(kSpvImageSampleImageIdInIdx);
+     new_image_id = CloneOriginalImage(old_image_id, builder);
+@@ -130,7 +139,9 @@
+     new_ref_inst->SetResultId(new_ref_id);
+   }
+   // Update new ref with new image if created
+-  if (new_image_id != 0)
++  if (new_texel_ptr_id != 0)
++    new_ref_inst->SetInOperand(0, {new_texel_ptr_id});
++  else if (new_image_id != 0)
+     new_ref_inst->SetInOperand(kSpvImageSampleImageIdInIdx, {new_image_id});
+   // Register new reference and add to new block
+   Instruction* added_inst = builder->AddInstruction(std::move(new_ref_inst));
+@@ -190,15 +201,41 @@
+ bool InstBindlessCheckPass::AnalyzeDescriptorReference(Instruction* ref_inst,
+                                                        RefAnalysis* ref) {
+   ref->ref_inst = ref_inst;
++  ref->image_texel_ptr_id = 0;
+   // Mavk: integer buffer atomics share the pointer operand0 and byte-range
+   // analysis with ordinary scalar loads/stores. The existing guarded clone
+   // preserves scope/semantics/operands; an invalid result is zero and stores
+-  // have no side effect. ImageTexelPointer is deliberately not admitted here.
++  // have no side effect. Storage texel pointers use descriptor initialization
++  // and image-size bounds instead of the buffer byte-offset path.
+   const auto op = static_cast<uint32_t>(ref_inst->opcode());
+   if (op == SpvOpLoad || op == SpvOpStore || (op >= 227 && op <= 242)) {
+     ref->desc_load_id = 0;
+     ref->ptr_id = ref_inst->GetSingleWordInOperand(kSpvLoadPtrIdInIdx);
+     Instruction* ptr_inst = get_def_use_mgr()->GetDef(ref->ptr_id);
++    if (op >= 227 && op <= 242 && ptr_inst->opcode() == SpvOpImageTexelPointer) {
++      ref->image_texel_ptr_id = ptr_inst->result_id();
++      ref->image_id = ptr_inst->GetSingleWordInOperand(0);
++      ref->ptr_id = ref->image_id;
++      Instruction* image_pointer = get_def_use_mgr()->GetDef(ref->ptr_id);
++      Instruction* image_type = GetPointeeTypeInst(image_pointer);
++      if (image_type->opcode() != SpvOpTypeImage ||
++          image_type->GetSingleWordInOperand(kSpvTypeImageDim) != SpvDimBuffer)
++        return false;
++      ref->strg_class = SpvStorageClassUniformConstant;
++      if (image_pointer->opcode() == SpvOpVariable) {
++        ref->var_id = image_pointer->result_id();
++        ref->desc_idx_id = 0;
++      } else if (image_pointer->opcode() == SpvOpAccessChain &&
++                 image_pointer->NumInOperands() == 2) {
++        ref->var_id = image_pointer->GetSingleWordInOperand(0);
++        ref->desc_idx_id = image_pointer->GetSingleWordInOperand(1);
++        if (get_def_use_mgr()->GetDef(ref->var_id)->opcode() != SpvOpVariable)
++          return false;
++      } else {
++        return false;
++      }
++      return true;
++    }
+     if (ptr_inst->opcode() != SpvOp::SpvOpAccessChain) return false;
+     ref->var_id = ptr_inst->GetSingleWordInOperand(kSpvAccessChainBaseIdInIdx);
+     Instruction* var_inst = get_def_use_mgr()->GetDef(ref->var_id);
+@@ -658,7 +695,7 @@
+   if (!AnalyzeDescriptorReference(&*ref_inst_itr, &ref)) return;
+   // Determine if we can only do initialization check
+   bool init_check = false;
+-  if (ref.desc_load_id != 0 || !buffer_bounds_enabled_) {
++  if (ref.desc_load_id != 0 || ref.image_texel_ptr_id != 0 || !buffer_bounds_enabled_) {
+     init_check = true;
+   } else {
+     // For now, only do bounds check for non-aggregate types. Otherwise
+@@ -717,10 +754,13 @@
+   Instruction* ref_inst = &*ref_inst_itr;
+   SpvOp op = ref_inst->opcode();
+   uint32_t num_in_oprnds = ref_inst->NumInOperands();
++  const bool atomic = static_cast<uint32_t>(op) >= 227 &&
++                      static_cast<uint32_t>(op) <= 242 &&
++                      get_def_use_mgr()->GetDef(ref_inst->GetSingleWordInOperand(0))->opcode() == SpvOpImageTexelPointer;
+   const uint32_t base_operands = op == SpvOpImageWrite ? 3u : 2u;
+-  if (op != SpvOpImageRead && op != SpvOpImageFetch && op != SpvOpImageWrite)
++  if (!atomic && op != SpvOpImageRead && op != SpvOpImageFetch && op != SpvOpImageWrite)
+     return;
+-  if (num_in_oprnds != base_operands) {
++  if (!atomic && num_in_oprnds != base_operands) {
+     const uint32_t supported = SpvImageOperandsSignExtendMask |
+                                SpvImageOperandsZeroExtendMask |
+                                SpvImageOperandsNontemporalMask;
+@@ -733,7 +773,7 @@
+   if (!AnalyzeDescriptorReference(ref_inst, &ref)) return;
+   // Only process if image is texel buffer
+   Instruction* image_inst = get_def_use_mgr()->GetDef(ref.image_id);
+-  uint32_t image_ty_id = image_inst->type_id();
++  uint32_t image_ty_id = atomic ? GetPointeeTypeId(image_inst) : image_inst->type_id();
+   Instruction* image_ty_inst = get_def_use_mgr()->GetDef(image_ty_id);
+   if (image_ty_inst->GetSingleWordInOperand(kSpvTypeImageDim) != SpvDimBuffer)
+     return;
+@@ -757,14 +797,23 @@
+       IRContext::kAnalysisDefUse | IRContext::kAnalysisInstrToBlockMapping);
+   new_blocks->push_back(std::move(new_blk_ptr));
+   // Get texel coordinate
++  Instruction* coordinate_source = atomic
++      ? get_def_use_mgr()->GetDef(ref.image_texel_ptr_id) : ref_inst;
+   uint32_t coord_id =
+-      GenUintCastCode(ref_inst->GetSingleWordInOperand(1), &builder);
++      GenUintCastCode(coordinate_source->GetSingleWordInOperand(1), &builder);
+   // If index id not yet set, binding is single descriptor, so set index to
+   // constant 0.
+   if (ref.desc_idx_id == 0) ref.desc_idx_id = builder.GetUintConstantId(0u);
+   // Get texel buffer size.
++  uint32_t query_image_id = ref.image_id;
++  if (atomic) {
++    Instruction* image = builder.AddLoad(image_ty_id, ref.image_id);
++    query_image_id = image->result_id();
++    if (get_decoration_mgr()->HasDecoration(ref.image_id, SpvDecorationNonUniformEXT))
++      get_decoration_mgr()->AddDecoration(query_image_id, SpvDecorationNonUniformEXT);
++  }
+   Instruction* size_inst =
+-      builder.AddUnaryOp(GetUintId(), SpvOpImageQuerySize, ref.image_id);
++      builder.AddUnaryOp(GetUintId(), SpvOpImageQuerySize, query_image_id);
+   uint32_t size_id = size_inst->result_id();
+   // Generate runtime initialization/bounds test code with true branch
+   // being full reference and false branch being debug output and zero
+--- a/source/opt/inst_bindless_check_pass.h
++++ b/source/opt/inst_bindless_check_pass.h
+@@ -124,6 +124,7 @@
+   // AnalyzeDescriptorReference. It is necessary and sufficient for further
+   // analysis and regeneration of the reference.
+   typedef struct RefAnalysis {
++    uint32_t image_texel_ptr_id;
+     uint32_t desc_load_id;
+     uint32_t image_id;
+     uint32_t load_id;

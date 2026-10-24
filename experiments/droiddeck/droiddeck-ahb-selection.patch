@@ -1,0 +1,71 @@
+diff --git a/tools/linuxfs/overlay/usr/local/bin/droiddeck-game-env b/tools/linuxfs/overlay/usr/local/bin/droiddeck-game-env
+--- a/tools/linuxfs/overlay/usr/local/bin/droiddeck-game-env
++++ b/tools/linuxfs/overlay/usr/local/bin/droiddeck-game-env
+@@ -531,2 +531,16 @@
+         private_wsi = env.get("DROIDDECK_MAVK_XCB_AHB_WSI")
++        selection = env.get("DROIDDECK_MAVK_PRESENTATION", "profile")
++        if selection not in ("profile", "x11-shm", "ahb-bgra"):
++            raise SystemGraphicsError("invalid experimental Mavk presentation: " + selection)
++        if selection == "x11-shm":
++            for key in ("MAVK_WSI_AHB_ALLOC_ONLY", "MAVK_WSI_AHB_PRESENT",
++                        "MAVK_WSI_XCB_AHB_PROXY", "MAVK_WSI_AHB_BGRA_BLIT"):
++                result.pop(key, None)
++            result["WSI_X11_FORCE_SHM"] = "1"
++            if private_wsi:
++                result["VK_LAYER_PATH"] = os.pathsep.join(
++                    path for path in result["VK_LAYER_PATH"].split(os.pathsep) if path != private_wsi)
++            private_wsi = None
++        if selection == "ahb-bgra" and not private_wsi:
++            raise SystemGraphicsError("AHB/BGRA requires an explicit private WSI directory")
+         if private_wsi:
+@@ -540,2 +554,13 @@
+                 raise SystemGraphicsError("private XCB/AHB WSI requires a pinned library and opted-in compositor")
++            if selection == "ahb-bgra":
++                try:
++                    receipt = json.loads((private / "mavk-ahb.json").read_text())
++                    if (receipt.get("version") != 1 or receipt.get("library_sha256") != digest
++                            or receipt.get("present_modes") != ["fifo"]
++                            or receipt.get("min_images") != 3
++                            or receipt.get("bgra8_gpu_blit") is not True):
++                        raise ValueError("unverified BGRA/three-buffer backend")
++                except (OSError, ValueError, AttributeError) as error:
++                    raise SystemGraphicsError("AHB/BGRA capability receipt unavailable: " + str(error)) from error
++                result["MAVK_WSI_AHB_BGRA_BLIT"] = "1"
+             result["VK_LAYER_PATH"] = str(private) + ":" + result["VK_LAYER_PATH"]
+@@ -543,3 +568,3 @@
+             result.pop("WSI_X11_FORCE_SHM", None)
+-            print("Mavk: experimental XCB/AHB rendering; input routing not yet verified", file=sys.stderr)
++            print("Mavk: experimental fullscreen XCB/AHB; select x11-shm to revert; game compatibility unverified", file=sys.stderr)
+     for name in ("DISABLE_WSI_LAYER", "ENABLE_VK_LAYER_VALVE_steam_fossilize_1"):
+diff --git a/tools/tests/test_game_environment.py b/tools/tests/test_game_environment.py
+--- a/tools/tests/test_game_environment.py
++++ b/tools/tests/test_game_environment.py
+@@ -60,2 +60,28 @@
+             self.assertNotIn("WSI_X11_FORCE_SHM", selected)
++            env["DROIDDECK_MAVK_PRESENTATION"] = "ahb-bgra"
++            with self.assertRaises(MODULE["SystemGraphicsError"]):
++                MODULE["system_graphics_launch"](command, env)
++            receipt = dict(version=1, library_sha256=env["DROIDDECK_MAVK_XCB_AHB_SHA256"],
++                           present_modes=["fifo"], min_images=3, bgra8_gpu_blit=True)
++            receipt_path = private / "mavk-ahb.json"
++            receipt_path.write_text(json.dumps(receipt))
++            _, bgra = MODULE["system_graphics_launch"](command, env)
++            self.assertEqual(bgra["MAVK_WSI_AHB_BGRA_BLIT"], "1")
++            receipt_path.write_text(json.dumps(dict(receipt, min_images=2)))
++            with self.assertRaises(MODULE["SystemGraphicsError"]):
++                MODULE["system_graphics_launch"](command, env)
++            receipt_path.write_text(json.dumps(dict(receipt, library_sha256="0" * 64)))
++            with self.assertRaises(MODULE["SystemGraphicsError"]):
++                MODULE["system_graphics_launch"](command, env)
++            fallback = dict(bgra, DROIDDECK_MAVK_PRESENTATION="x11-shm",
++                            DROIDDECK_MAVK_XCB_AHB_SHA256="0" * 64)
++            _, shm = MODULE["system_graphics_launch"](command, fallback)
++            self.assertEqual(shm["WSI_X11_FORCE_SHM"], "1")
++            self.assertNotIn(str(private), shm["VK_LAYER_PATH"].split(os.pathsep))
++            for key in ("MAVK_WSI_AHB_ALLOC_ONLY", "MAVK_WSI_AHB_PRESENT",
++                        "MAVK_WSI_XCB_AHB_PROXY", "MAVK_WSI_AHB_BGRA_BLIT"):
++                self.assertNotIn(key, shm)
++            with self.assertRaises(MODULE["SystemGraphicsError"]):
++                MODULE["system_graphics_launch"](command, dict(env, DROIDDECK_MAVK_PRESENTATION="unknown"))
++            env.pop("DROIDDECK_MAVK_PRESENTATION")
+             env["DROIDDECK_MAVK_XCB_AHB_SHA256"] = "0" * 64

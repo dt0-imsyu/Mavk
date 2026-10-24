@@ -1,0 +1,62 @@
+/*
+ * Copyright (c) 2019-2026 Arm Limited.
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to
+ * deal in the Software without restriction, including without limitation the
+ * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+#pragma once
+
+#include <vulkan/vulkan.h>
+
+namespace util
+{
+namespace drm
+{
+
+/**
+ * @brief Struct describing a DRM format with modifier.
+ */
+struct drm_format_pair
+{
+   uint32_t fourcc;
+   uint64_t modifier;
+};
+
+uint32_t vk_to_drm_format(VkFormat vk_format);
+VkFormat drm_to_vk_format(uint32_t drm_format);
+VkFormat drm_to_vk_srgb_format(uint32_t drm_format);
+uint32_t drm_fourcc_format_get_num_planes(uint32_t format);
+
+/**
+ * @brief Get the alpha-less variant of a DRM format, e.g. DRM_FORMAT_XRGB8888 for DRM_FORMAT_ARGB8888.
+ *
+ * Presenting through this variant makes the compositor ignore the alpha channel, which is how
+ * VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR is implemented on Wayland.
+ *
+ * @param drm_format DRM fourcc code.
+ *
+ * @return The DRM fourcc with the alpha channel replaced by padding, or @p drm_format itself if it has
+ *         no alpha channel.
+ */
+uint32_t drm_opaque_fourcc(uint32_t drm_format);
+
+} // namespace drm
+} // namespace util

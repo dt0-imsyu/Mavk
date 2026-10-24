@@ -1,0 +1,16 @@
+diff --git a/src/dxvk/dxvk_device_info.cpp b/src/dxvk/dxvk_device_info.cpp
+--- a/src/dxvk/dxvk_device_info.cpp
++++ b/src/dxvk/dxvk_device_info.cpp
+@@ -679,3 +679,12 @@ namespace dxvk {
+     for (const auto& f : getFeatureList()) {
++      // Local diagnostic compatibility selection, not a native capability lie.
++      // The current Mavk guard compiler predates FloatControls2 (SPIR-V6029).
++      // Ask Sarek to use its existing conservative fallback, never strip ops.
++      if (mavkNullProbe() && env::getEnvVar("MAVK_SAREK_LEGACY_SPIRV") == "1"
++       && !std::strcmp(f.readableName, "shaderFloatControls2")) {
++        *f.featureEnabled = VK_FALSE;
++        Logger::warn("MAVK DIAGNOSTIC: optional FloatControls2 disabled in Sarek; native capability unchanged");
++        continue;
++      }
+       // Enable any supported feature that we know about
+       if ((*f.featureEnabled = *f.featureSupported)) {

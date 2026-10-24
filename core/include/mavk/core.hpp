@@ -1,5 +1,6 @@
 #pragma once
 #include <vulkan/vulkan.h>
+#include <mavk/vulkan_dispatch.hpp>
 #include <cstdint>
 #include <cstddef>
 
@@ -17,11 +18,14 @@ class DeviceContext {
 public:
     // Optional capability must actually have been enabled at vkCreateDevice.
     DeviceContext(VkPhysicalDevice physical,VkDevice device,uint32_t queueFamily,bool timelineEnabled=false);
+    DeviceContext(VkPhysicalDevice physical,VkDevice device,uint32_t queueFamily,const VulkanDispatch&,bool timelineEnabled=false);
     DeviceContext(const DeviceContext&)=delete;
     DeviceContext& operator=(const DeviceContext&)=delete;
     VkDevice vkDevice() const {return device_;}
     uint32_t queueFamily() const {return family_;}
     VkPhysicalDevice physicalDevice() const {return physical_;}
+    const VulkanDispatch& dispatch() const {return dispatch_;}
+    const VkPhysicalDeviceProperties& properties() const {return properties_;}
     uint32_t memoryType(uint32_t compatible,VkMemoryPropertyFlags required,VkMemoryPropertyFlags preferred=0) const;
     VkMemoryPropertyFlags memoryFlags(uint32_t type) const;
     const Counters& counters() const {return counters_;}
@@ -31,6 +35,7 @@ private:
     friend class SampledImage;
     friend class TimelineSemaphore;
     VkDevice device_;uint32_t family_;VkPhysicalDeviceMemoryProperties memory_{};Counters counters_{};VkPhysicalDevice physical_{};bool timelineEnabled_{};
+    VulkanDispatch dispatch_;VkPhysicalDeviceProperties properties_{};
 };
 class Buffer {
 public:

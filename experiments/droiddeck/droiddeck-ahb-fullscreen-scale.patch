@@ -1,0 +1,17 @@
+diff --git a/app/src/main/cpp/waylandcomp/src/compositor.c b/app/src/main/cpp/waylandcomp/src/compositor.c
+--- a/app/src/main/cpp/waylandcomp/src/compositor.c
++++ b/app/src/main/cpp/waylandcomp/src/compositor.c
+@@ -1715,7 +1715,12 @@ static struct surface *ahb_layer_only_candidate(int scene_w, int scene_h) {
+     if (!wl_list_empty(&s->children)) return NULL;
+     if (g_hide_shell && !strcmp(client_name(wl_resource_get_client(s->resource)), "explorer.exe")) return NULL;
+     surface_size(s, &w, &h);
+-    if (w != scene_w || h != scene_h || s->buf_w != scene_w || s->buf_h != scene_h) return NULL;
++    const int exact_size = w == scene_w && h == scene_h && s->buf_w == scene_w && s->buf_h == scene_h;
++    /* The display layer already maps the complete buffer onto the output rectangle. */
++    const int fullscreen_scale = s->fullscreen && w == s->buf_w && h == s->buf_h &&
++        w > 0 && h > 0 && scene_w > 0 && scene_h > 0 &&
++        (int64_t)w * scene_h == (int64_t)h * scene_w;
++    if (!exact_size && !fullscreen_scale) return NULL;
+     return s;
+ }
+ 

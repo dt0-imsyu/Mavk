@@ -1,0 +1,88 @@
+diff --git a/src/gallium/auxiliary/driver_trace/tr_context.c b/src/gallium/auxiliary/driver_trace/tr_context.c
+index d3386c4..84fec4a 100644
+--- a/src/gallium/auxiliary/driver_trace/tr_context.c
++++ b/src/gallium/auxiliary/driver_trace/tr_context.c
+@@ -1272,6 +1272,31 @@ trace_context_set_vertex_buffers(struct pipe_context *_pipe,
+    struct trace_context *tr_ctx = trace_context(_pipe);
+    struct pipe_context *pipe = tr_ctx->pipe;
+ 
++   if (tr_ctx->mavk_vertex_snapshot && buffers && tr_ctx->mavk_vertex_snapshots < 12) {
++      unsigned sample = tr_ctx->mavk_vertex_snapshots++;
++      for (unsigned i = 0; i < num_buffers; i++) {
++         if (buffers[i].is_user_buffer || !buffers[i].buffer.resource)
++            continue;
++         for (unsigned m = 0; m < ARRAY_SIZE(tr_ctx->mavk_maps); m++) {
++            unsigned offset = buffers[i].buffer_offset;
++            if (!tr_ctx->mavk_maps[m].map ||
++                tr_ctx->mavk_maps[m].resource != buffers[i].buffer.resource ||
++                offset < tr_ctx->mavk_maps[m].offset ||
++                offset - tr_ctx->mavk_maps[m].offset >= tr_ctx->mavk_maps[m].size)
++               continue;
++            unsigned relative = offset - tr_ctx->mavk_maps[m].offset;
++            unsigned size = MIN2(160, tr_ctx->mavk_maps[m].size - relative);
++            const unsigned char *data = tr_ctx->mavk_maps[m].map + relative;
++            fprintf(stderr, "MAVK_VERTEX_SNAPSHOT sample=%u binding=%u resource=%p offset=%u bytes=%u hex=",
++                    sample, i, (void *)buffers[i].buffer.resource, offset, size);
++            for (unsigned b = 0; b < size; b++)
++               fprintf(stderr, "%02x", data[b]);
++            fprintf(stderr, "\n");
++            break;
++         }
++      }
++   }
++
+    bool found = false;
+    for (unsigned i = 0; buffers && i < num_buffers; i++) {
+       if (buffers[i].is_user_buffer || buffers[i].buffer.resource)
+@@ -1763,6 +1788,19 @@ trace_context_transfer_map(struct pipe_context *_context,
+    if (!map)
+       return NULL;
+    *transfer = trace_transfer_create(tr_context, resource, xfer);
++   tr_context->mavk_vertex_snapshot = debug_get_bool_option("MAVK_TRACE_VERTEX_SNAPSHOT", false);
++   if (tr_context->mavk_vertex_snapshot && resource->target == PIPE_BUFFER) {
++      for (unsigned m = 0; m < ARRAY_SIZE(tr_context->mavk_maps); m++) {
++         if (tr_context->mavk_maps[m].map)
++            continue;
++         tr_context->mavk_maps[m].resource = resource;
++         tr_context->mavk_maps[m].transfer = xfer;
++         tr_context->mavk_maps[m].map = map;
++         tr_context->mavk_maps[m].offset = box->x;
++         tr_context->mavk_maps[m].size = box->width;
++         break;
++      }
++   }
+    trace_dump_call_begin("pipe_context", resource->target == PIPE_BUFFER ? "buffer_map" : "texture_map");
+ 
+    trace_dump_arg(ptr, pipe);
+@@ -1816,6 +1854,11 @@ trace_context_transfer_unmap(struct pipe_context *_context,
+    struct pipe_transfer *transfer = tr_trans->transfer;
+ 
+ 
++   for (unsigned m = 0; m < ARRAY_SIZE(tr_ctx->mavk_maps); m++) {
++      if (tr_ctx->mavk_maps[m].transfer == transfer)
++         tr_ctx->mavk_maps[m].map = NULL;
++   }
++
+    trace_dump_call_begin("pipe_context", "transfer_unmap");
+ 
+    trace_dump_arg(ptr, context);
+diff --git a/src/gallium/auxiliary/driver_trace/tr_context.h b/src/gallium/auxiliary/driver_trace/tr_context.h
+index fb69a00..22acb0e 100644
+--- a/src/gallium/auxiliary/driver_trace/tr_context.h
++++ b/src/gallium/auxiliary/driver_trace/tr_context.h
+@@ -61,6 +61,15 @@ struct trace_context
+    bool seen_fb_state;
+ 
+    bool threaded;
++
++   bool mavk_vertex_snapshot;
++   unsigned mavk_vertex_snapshots;
++   struct {
++      struct pipe_resource *resource;
++      struct pipe_transfer *transfer;
++      const unsigned char *map;
++      unsigned offset, size;
++   } mavk_maps[64];
+ };
+ 
+ 

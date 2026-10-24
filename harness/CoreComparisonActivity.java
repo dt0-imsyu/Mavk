@@ -15,8 +15,10 @@ public final class CoreComparisonActivity extends Activity {
     static native String runBc67(byte[] vertex,byte[] fragment,byte[] hdrFragment,String report,boolean validation);
     static native String runBcTexture(byte[] vertex,byte[] fragment,String report,boolean validation);
     static native String runNullBuffers(byte[] shader,String report,boolean validation);
-    static native String runNullImages(byte[] shader,String report,boolean validation);
+    static native String runNullImages(byte[] shader,String report,boolean validation,boolean liveArrays);
+    static native String runNativeImmutableSamplers(byte[] shader,String report,boolean validation,boolean copyControl);
     static native String runNullTexels(byte[] shader,String report,boolean validation);
+    static native String runSeparateSamplers(byte[] shader,String report,boolean validation);
     static native String runNullAtomics(byte[] shader,String report,boolean validation);
     static native String runRuntimeNullAtomics(byte[] shader,String report,boolean validation,boolean multiSet);
     static native String runDescriptorGenerations(byte[] shader,String report,boolean validation);
@@ -37,7 +39,15 @@ public final class CoreComparisonActivity extends Activity {
         new Thread(() -> {
             String result;
             try {
-                if(getIntent().getBooleanExtra("nullTexels",false)){
+                if(getIntent().getBooleanExtra("nativeImmutableSamplers",false)){
+                    try(java.io.InputStream shader=getAssets().open("immutable-samplers.comp.spv")){
+                        result=runNativeImmutableSamplers(shader.readAllBytes(),new File(getFilesDir(),"core-immutable-samplers.json").getAbsolutePath(),getIntent().getBooleanExtra("validation",false),getIntent().getBooleanExtra("copyControl",false));
+                    }
+                }else if(getIntent().getBooleanExtra("separateSamplers",false)){
+                    try(java.io.InputStream shader=getAssets().open("separate-samplers.original.spv")){
+                        result=runSeparateSamplers(shader.readAllBytes(),new File(getFilesDir(),"core-separate-samplers.json").getAbsolutePath(),getIntent().getBooleanExtra("validation",false));
+                    }
+                }else if(getIntent().getBooleanExtra("nullTexels",false)){
                     try(java.io.InputStream shader=getAssets().open("null-texels.original.spv")){
                         result=runNullTexels(shader.readAllBytes(),new File(getFilesDir(),"core-null-texels.json").getAbsolutePath(),getIntent().getBooleanExtra("validation",false));
                     }
@@ -59,8 +69,10 @@ public final class CoreComparisonActivity extends Activity {
                         result=runNullAtomics(shader.readAllBytes(),new File(getFilesDir(),"core-null-atomics.json").getAbsolutePath(),getIntent().getBooleanExtra("validation",false));
                     }
                 }else if(getIntent().getBooleanExtra("nullImages",false)){
-                    try(java.io.InputStream shader=getAssets().open("null-images.comp.spv")){
-                        result=runNullImages(shader.readAllBytes(),new File(getFilesDir(),"core-null-images.json").getAbsolutePath(),getIntent().getBooleanExtra("validation",false));
+                    String variant=getIntent().getStringExtra("imageVariant");
+                    if(variant!=null&&!variant.equals("2d")&&!variant.equals("array")&&!variant.equals("volume")&&!variant.equals("cube"))throw new IllegalArgumentException("Unknown bundled image variant");
+                    try(java.io.InputStream shader=getAssets().open(variant==null?"null-images.comp.spv":"null-images."+variant+".spv")){
+                        result=runNullImages(shader.readAllBytes(),new File(getFilesDir(),"core-null-images.json").getAbsolutePath(),getIntent().getBooleanExtra("validation",false),getIntent().getBooleanExtra("liveArrays",false));
                     }
                 }else if(getIntent().getBooleanExtra("nullBuffers",false)){
                     try(java.io.InputStream shader=getAssets().open("null-buffers.comp.spv")){

@@ -1,5 +1,20 @@
-param([Parameter(Mandatory=$true)][string]$OutputDirectory,[string]$ValidationLibrary,[string]$DevelopmentBundle,[string]$UiSourceDirectory,[string]$NullBufferShader,[string]$NullImageShader,[string]$NullAtomicShader,[string]$GuardCompilerBuild,[string]$RuntimeAtomicShader)
+param([Parameter(Mandatory=$true)][string]$OutputDirectory,[string]$ValidationLibrary,[string]$DevelopmentBundle,[string]$UiSourceDirectory,[string]$NullBufferShader,[string]$NullImageShader,[string]$NullAtomicShader,[string]$GuardCompilerBuild,[string]$RuntimeAtomicShader,[string]$NullImageVariants)
 $ErrorActionPreference='Stop'
+function CheckFixedGuardShader([string]$path){
+    if(!$path){return}
+    $shaderBytes=[IO.File]::ReadAllBytes([IO.Path]::GetFullPath($path))
+    if($shaderBytes.Length -lt 20 -or $shaderBytes.Length % 4 -or [BitConverter]::ToUInt32($shaderBytes,0) -ne 0x07230203){throw 'Malformed guarded shader'}
+    $sets=@()
+    for($wordOffset=20;$wordOffset -lt $shaderBytes.Length;){
+        $header=[BitConverter]::ToUInt32($shaderBytes,$wordOffset);$count=$header -shr 16
+        if(!$count -or $wordOffset+$count*4 -gt $shaderBytes.Length){throw 'Malformed guarded shader instruction'}
+        if(($header -band 65535) -eq 71 -and $count -eq 4 -and [BitConverter]::ToUInt32($shaderBytes,$wordOffset+8) -eq 34){$sets += [BitConverter]::ToUInt32($shaderBytes,$wordOffset+12)}
+        $wordOffset += $count*4
+    }
+    if(1 -notin $sets -or @($sets | Where-Object {$_ -gt 1}).Count){throw 'Fixed native guard test requires public set0/private set1; incompatible shader artifact'}
+}
+foreach($shaderPath in @($NullBufferShader,$NullImageShader,$NullAtomicShader)){CheckFixedGuardShader $shaderPath}
+if($NullImageVariants){foreach($variant in @('2d','array','volume','cube')){CheckFixedGuardShader (Join-Path $NullImageVariants "$variant.spv")}}
 $out=[IO.Path]::GetFullPath($OutputDirectory)
 if(Test-Path -LiteralPath $out){throw 'Preserve previous build; choose fresh output directory'}
 $sdk=Join-Path $env:LOCALAPPDATA 'Android/Sdk'
@@ -26,6 +41,7 @@ if($DevelopmentBundle){
 if($ValidationLibrary){Copy-Item -LiteralPath $ValidationLibrary -Destination "$out/payload/lib/arm64-v8a/libVkLayer_khronos_validation.so"}
 if($NullBufferShader){Copy-Item -LiteralPath $NullBufferShader -Destination "$out/payload/assets/null-buffers.comp.spv"}
 if($NullImageShader){Copy-Item -LiteralPath $NullImageShader -Destination "$out/payload/assets/null-images.comp.spv"}
+if($NullImageVariants){foreach($variant in @('2d','array','volume','cube')){Copy-Item -LiteralPath (Join-Path $NullImageVariants "$variant.spv") -Destination "$out/payload/assets/null-images.$variant.spv"}}
 if($NullAtomicShader){Copy-Item -LiteralPath $NullAtomicShader -Destination "$out/payload/assets/null-atomics.comp.spv"}
 if($RuntimeAtomicShader){if(!$GuardCompilerBuild){throw 'Runtime shader requires native guard compiler'};Copy-Item -LiteralPath $RuntimeAtomicShader -Destination "$out/payload/assets/null-atomics.original.spv"}
 function Checked([string]$name){if($LASTEXITCODE){throw "$name failed ($LASTEXITCODE)"}}
@@ -65,6 +81,8 @@ if($UiSourceDirectory){
 }
 & "$ndk/shader-tools/windows-x86_64/glslc.exe" --target-env=vulkan1.1 "$PSScriptRoot/shaders/verify.comp" -o "$out/payload/assets/verify.comp.spv"
 Checked 'shader'
+& "$ndk/shader-tools/windows-x86_64/glslc.exe" --target-env=vulkan1.1 "$PSScriptRoot/../compatibility/test/immutable-samplers.comp" -o "$out/payload/assets/immutable-samplers.comp.spv"
+Checked 'shared immutable sampler oracle shader'
 foreach($shader in @('vertex-buffer.vert','matrix.vert','offscreen.frag','scene.vert','scene.frag')){
     & "$ndk/shader-tools/windows-x86_64/glslc.exe" --target-env=vulkan1.0 "$PSScriptRoot/../icd/test/$shader" -o "$out/payload/assets/$shader.spv"
     Checked "$shader geometry test"
@@ -84,6 +102,8 @@ if($GuardCompilerBuild){
     Checked 'multiset original shader'
     & "$ndk/shader-tools/windows-x86_64/glslc.exe" --target-env=vulkan1.1 "$PSScriptRoot/shaders/null-texels.comp" -o "$out/payload/assets/null-texels.original.spv"
     Checked 'texel original shader'
+    & "$ndk/shader-tools/windows-x86_64/glslc.exe" --target-env=vulkan1.1 "$PSScriptRoot/shaders/separate-samplers.comp" -o "$out/payload/assets/separate-samplers.original.spv"
+    Checked 'separate sampler original shader'
 }
 & "$ndk/toolchains/llvm/prebuilt/windows-x86_64/bin/clang++.exe" --target=aarch64-linux-android29 -std=c++17 -O2 -g -Wall -Wextra -Wno-missing-field-initializers -Werror -fPIC -I "$PSScriptRoot/../core/include" -c "$PSScriptRoot/../core/src/core.cpp" -o "$out/core.o"
 Checked 'Core compilation'

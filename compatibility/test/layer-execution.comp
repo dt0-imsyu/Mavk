@@ -1,0 +1,9 @@
+#version 450
+layout(local_size_x=1,local_size_y=1,local_size_z=1) in;
+layout(set=0,binding=0,std430) readonly buffer Seed {uint value;} seed;
+layout(set=0,binding=1,std430) buffer Result {uint value[256];} result;
+void main(){
+    uvec3 p=gl_GlobalInvocationID;
+    uint i=p.x+8*p.y+64*p.z;
+    if(i<256)result.value[i]=seed.value+i;
+}

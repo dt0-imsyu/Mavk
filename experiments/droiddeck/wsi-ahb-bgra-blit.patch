@@ -1,0 +1,28 @@
+diff --git a/wsi/wayland/surface_properties.cpp b/wsi/wayland/surface_properties.cpp
+--- a/wsi/wayland/surface_properties.cpp
++++ b/wsi/wayland/surface_properties.cpp
+@@ -46,1 +46,2 @@
+ #include <cstdio>
++#include "wsi-ahb-conversion.hpp"
+@@ -287,2 +288,11 @@
+          return VK_ERROR_OUT_OF_HOST_MEMORY;
++      if (mavk_ahb_bgra_enabled() && mavk_ahb_bgra_supported(layer::instance_private_data::get(physical_device),physical_device))
++      {
++         surface_format_properties converted{VK_FORMAT_B8G8R8A8_UNORM};
++         query.pNext=nullptr; query.format=VK_FORMAT_B8G8R8A8_UNORM;
++         query.usage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
++         TRY(converted.check_device_support(physical_device,query));
++         if (!supported_formats.try_insert(std::make_pair(VK_FORMAT_B8G8R8A8_UNORM,converted)))
++            return VK_ERROR_OUT_OF_HOST_MEMORY;
++      }
+    }
+diff --git a/wsi/wayland/swapchain.cpp b/wsi/wayland/swapchain.cpp
+--- a/wsi/wayland/swapchain.cpp
++++ b/wsi/wayland/swapchain.cpp
+@@ -315,1 +315,2 @@
+-          swapchain_create_info.imageFormat != VK_FORMAT_R8G8B8A8_UNORM ||
++          (swapchain_create_info.imageFormat != VK_FORMAT_R8G8B8A8_UNORM &&
++           !(swapchain_create_info.imageFormat==VK_FORMAT_B8G8R8A8_UNORM && mavk_ahb_bgra_enabled())) ||
+@@ -321,1 +322,1 @@
+-         swapchain_create_info.imageExtent, swapchain_create_info.imageUsage, m_ahb_present);
++         swapchain_create_info.imageExtent, swapchain_create_info.imageUsage, m_ahb_present, swapchain_create_info.imageFormat);

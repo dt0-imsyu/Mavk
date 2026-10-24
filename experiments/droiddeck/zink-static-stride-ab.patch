@@ -1,0 +1,13 @@
+diff --git a/src/gallium/drivers/zink/zink_program_state.hpp b/src/gallium/drivers/zink/zink_program_state.hpp
+index 17770d0..591cece 100644
+--- a/src/gallium/drivers/zink/zink_program_state.hpp
++++ b/src/gallium/drivers/zink/zink_program_state.hpp
+@@ -84,6 +84,8 @@ get_pipeline_idx(enum mesa_prim mode, VkPrimitiveTopology vkmode)
+ static bool
+ check_vertex_strides(struct zink_context *ctx)
+ {
++   if (debug_get_bool_option("MAVK_TEST_STATIC_VERTEX_STRIDE", false))
++      return false;
+    const struct zink_vertex_elements_state *ves = ctx->element_state;
+    for (unsigned i = 0; i < ves->hw_state.num_bindings; i++) {
+       const struct pipe_vertex_buffer *vb = ctx->vertex_buffers + ves->hw_state.binding_map[i];

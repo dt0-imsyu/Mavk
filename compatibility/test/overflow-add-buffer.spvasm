@@ -1,0 +1,37 @@
+; Array product fits, but adding the input member offset exceeds UINT32_MAX.
+OpCapability Shader
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %main "main"
+OpExecutionMode %main LocalSize 1 1 1
+OpDecorate %array ArrayStride 4
+OpMemberDecorate %inputblock 0 Offset 16
+OpDecorate %inputblock Block
+OpMemberDecorate %outputblock 0 Offset 0
+OpDecorate %outputblock Block
+OpDecorate %input DescriptorSet 0
+OpDecorate %input Binding 0
+OpDecorate %output DescriptorSet 0
+OpDecorate %output Binding 1
+%void = OpTypeVoid
+%function = OpTypeFunction %void
+%uint = OpTypeInt 32 0
+%zero = OpConstant %uint 0
+%index = OpConstant %uint 1073741823
+%array = OpTypeRuntimeArray %uint
+%inputblock = OpTypeStruct %array
+%outputblock = OpTypeStruct %array
+%inputptr = OpTypePointer StorageBuffer %inputblock
+%outputptr = OpTypePointer StorageBuffer %outputblock
+%uintptr = OpTypePointer StorageBuffer %uint
+%input = OpVariable %inputptr StorageBuffer
+%output = OpVariable %outputptr StorageBuffer
+%main = OpFunction %void None %function
+%entry = OpLabel
+%invalue = OpAccessChain %uintptr %input %zero %index
+%value = OpLoad %uint %invalue
+%outvalue = OpAccessChain %uintptr %output %zero %zero
+OpStore %outvalue %value
+%outofbounds = OpAccessChain %uintptr %output %zero %index
+OpStore %outofbounds %index
+OpReturn
+OpFunctionEnd

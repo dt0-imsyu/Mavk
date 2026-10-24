@@ -1,0 +1,13 @@
+#version 450
+layout(local_size_x=1) in;
+layout(r32ui,set=0,binding=0) coherent uniform uimageBuffer target;
+layout(set=0,binding=1,std430) buffer Results {uvec4 value[4];} result;
+void main(){
+    result.value[0]=imageLoad(target,17);
+    result.value[2]=imageLoad(target,1);
+    imageStore(target,0,uvec4(0x5A17C0DEu));
+    imageStore(target,17,uvec4(0xDEADBEEFu));
+    memoryBarrierImage();
+    result.value[1]=imageLoad(target,0);
+    result.value[3]=imageLoad(target,-1);
+}

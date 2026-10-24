@@ -1,0 +1,113 @@
+diff --git a/app/src/main/java/com/droiddeck/launcher/session/MavkExperimental.kt b/app/src/main/java/com/droiddeck/launcher/session/MavkExperimental.kt
+--- a/app/src/main/java/com/droiddeck/launcher/session/MavkExperimental.kt
++++ b/app/src/main/java/com/droiddeck/launcher/session/MavkExperimental.kt
+@@ -15,6 +15,60 @@ import java.security.SecureRandom
+ import java.util.concurrent.TimeUnit
+ 
+ internal object MavkExperimental {
++    private var ahbPrepared: Boolean? = null
++
++    fun ahbDisplay(context: Context): Boolean = context.getSharedPreferences("mavk", Context.MODE_PRIVATE)
++        .getBoolean("ahb_display", false)
++
++    fun selectAhbDisplay(context: Context, enabled: Boolean) {
++        context.getSharedPreferences("mavk", Context.MODE_PRIVATE).edit().putBoolean("ahb_display", enabled).apply()
++    }
++
++    private fun presentation(directory: File): Pair<File, String> {
++        val component = File(directory, "presentation/ahb")
++        val receiptFile = File(component, "mavk-ahb.json")
++        check(receiptFile.isFile && receiptFile.length() <= 4096) { "AHB component receipt missing" }
++        val receipt = org.json.JSONObject(receiptFile.readText())
++        check(receipt.getInt("version") == 1 && receipt.getInt("min_images") == 3 &&
++            receipt.getBoolean("bgra8_gpu_blit") && receipt.getJSONArray("present_modes").toString() == "[\"fifo\"]")
++        val expected = receipt.getString("library_sha256")
++        check(expected.matches(Regex("[0-9a-f]{64}")))
++        val library = File(component, "libVkLayer_window_system_integration.so")
++        check(library.isFile && library.length() in 64L..32L * 1024 * 1024)
++        val actual = java.security.MessageDigest.getInstance("SHA-256").digest(library.readBytes())
++            .joinToString("") { "%02x".format(it.toInt() and 255) }
++        check(actual == expected && File(component, "VkLayer_window_system_integration.json").isFile)
++        check(File(directory, "integration/droiddeck-game-env").canExecute())
++        return component to expected
++    }
++
++    fun prepareDisplay(context: Context, runtimeDir: File, width: Int, height: Int, mode: String) {
++        val wanted = available(context) && selected(context) && ahbDisplay(context) &&
++            mode in setOf(SessionService.MODE_STEAM, SessionService.MODE_RUN) &&
++            SystemVulkanDriver.usesDefault(SessionPrefs.linuxDriver(context)) && !SessionState.hdr
++        if (com.droiddeck.launcher.wayland.CompositorHost.isStarted) {
++            if (wanted && ahbPrepared != true) {
++                android.widget.Toast.makeText(context, "Restart DroidDeck to enable AHB; this session uses X11/SHM", android.widget.Toast.LENGTH_LONG).show()
++            }
++            return
++        }
++        ahbPrepared = false
++        val marker = File(runtimeDir, "mavk-explicit-ahb.enable")
++        runCatching {
++            check(!marker.exists() || marker.delete()) { "Cannot clear stale AHB marker" }
++            if (wanted) {
++                check(width in 320..4096 && height in 240..4096 && width % 2 == 0 && height % 2 == 0)
++                presentation(MavkRuntime.prepare(context))
++                marker.writeText("$width $height\n")
++                ahbPrepared = true
++            }
++        }.onFailure {
++            marker.delete()
++            Log.w("MavkSession", "AHB preparation failed; using X11/SHM", it)
++            if (wanted) android.widget.Toast.makeText(context, "AHB unavailable; using X11/SHM", android.widget.Toast.LENGTH_LONG).show()
++        }
++    }
++
+     fun available(context: Context): Boolean = context.packageName.endsWith(".mavk") && SystemVulkanDriver.isMali()
+ 
+     fun selected(context: Context): Boolean = context.getSharedPreferences("mavk", Context.MODE_PRIVATE)
+@@ -40,6 +94,17 @@ internal object MavkExperimental {
+         val work = File(context.filesDir, "mavk-session").apply { mkdirs() }
+         check(File(directory, "payload/libVkLayer_mavk_compat.so").isFile) { "Mavk layer is not staged" }
+         val runtime = SystemVulkanDriver.prepare(context)
++        val policy = File(directory, "integration/droiddeck-game-env")
++        if (policy.isFile && policy.canExecute()) {
++            environment += "DROIDDECK_GAME_ENV_LAUNCHER=${policy.path}"
++            val useAhb = ahbDisplay(context) && ahbPrepared == true
++            environment += "DROIDDECK_MAVK_PRESENTATION=" + if (useAhb) "ahb-bgra" else "x11-shm"
++            if (useAhb) {
++                val (component, hash) = presentation(directory)
++                environment += "DROIDDECK_MAVK_XCB_AHB_WSI=${component.path}"
++                environment += "DROIDDECK_MAVK_XCB_AHB_SHA256=$hash"
++            }
++        }
+         environment.removeAll { it.startsWith("DXVK_MALI_COMPAT=") || it.startsWith("LD_LIBRARY_PATH=") }
+         environment += listOf(
+             "DROIDDECK_MAVK_DIRECT=1", "DISPLAY=:99", "BL_SYSV_DIR=${File(work, "sysv").path}",
+diff --git a/app/src/main/java/com/droiddeck/launcher/SessionActivity.kt b/app/src/main/java/com/droiddeck/launcher/SessionActivity.kt
+--- a/app/src/main/java/com/droiddeck/launcher/SessionActivity.kt
++++ b/app/src/main/java/com/droiddeck/launcher/SessionActivity.kt
+@@ -1273,6 +1273,10 @@ class SessionActivity : ComponentActivity(), SurfaceHolder.Callback {
+             Log.i(TAG, "hdr: " + (if (on) "on" else if (wanted) "wanted but ${probe.reason}" else "off") + " · display ${probe.formats.ifEmpty { "SDR" }}")
+         }
+         com.droiddeck.launcher.gpu.DriverSetupLog.write(this, "compositor.start driver=$driverId")
++        com.droiddeck.launcher.session.MavkExperimental.prepareDisplay(
++            this, runtimeDir, size.first, size.second,
++            SessionPrefs.prefMode(intent.getStringExtra(SessionService.EXTRA_MODE) ?: SessionService.MODE_STEAM),
++        )
+         CompositorHost.startOrAttach(
+             holder.surface, runtimeDir.path,
+             driverId?.let { turnip.driverPath(it) }, driverId?.let { turnip.libraryName(it) },
+diff --git a/app/src/main/java/com/droiddeck/launcher/ui/FrontEndSetup.kt b/app/src/main/java/com/droiddeck/launcher/ui/FrontEndSetup.kt
+--- a/app/src/main/java/com/droiddeck/launcher/ui/FrontEndSetup.kt
++++ b/app/src/main/java/com/droiddeck/launcher/ui/FrontEndSetup.kt
+@@ -364,6 +364,13 @@ internal fun SetupPanel(
+                                         mavkEnabled = it
+                                     }
+                                     if (mavkEnabled) {
++                                        var ahbDisplay by remember { mutableStateOf(com.droiddeck.launcher.session.MavkExperimental.ahbDisplay(ctx)) }
++                                        ToggleRow(host, "mavk-ahb-display", "Mavk AHB display (experimental)",
++                                            "Fullscreen SDR only. Restart DroidDeck to enable; turn off to use X11/SHM.",
++                                            ahbDisplay, enabled = !com.droiddeck.launcher.session.SessionState.running) {
++                                            com.droiddeck.launcher.session.MavkExperimental.selectAhbDisplay(ctx, it)
++                                            ahbDisplay = it
++                                        }
+                                         var hardwareUi by remember { mutableStateOf(com.droiddeck.launcher.session.MavkExperimental.steamHardwareUi(ctx)) }
+                                         ToggleRow(host, "mavk-steam-ui", stringResource(R.string.mavk_steam_ui),
+                                             stringResource(R.string.mavk_steam_ui_hint),

@@ -1,0 +1,597 @@
+/*
+ * Copyright (c) 2017-2019, 2021-2026 Arm Limited.
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to
+ * deal in the Software without restriction, including without limitation the
+ * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+#define VK_USE_PLATFORM_WAYLAND_KHR 1
+
+#ifndef __STDC_VERSION__
+#define __STDC_VERSION__ 0
+#endif
+
+#include <wayland-client.h>
+#include <linux-dmabuf-unstable-v1-client-protocol.h>
+
+#include <cassert>
+#include <cstdio>
+#include <cstdlib>
+#include <algorithm>
+#include <array>
+#include <cstring>
+#include "present_timing_handler.hpp"
+#include "surface_properties.hpp"
+#include "surface.hpp"
+#include "layer/private_data.hpp"
+#include "wl_helpers.hpp"
+#include "wl_object_owner.hpp"
+#include <vulkan/vulkan_android.h>
+#include <cstdio>
+#include "wsi-ahb-conversion.hpp"
+#include "util/drm/drm_utils.hpp"
+#include "util/log.hpp"
+#include "util/macros.hpp"
+#include "util/helpers.hpp"
+
+namespace wsi
+{
+namespace wayland
+{
+
+void surface_properties::populate_present_mode_compatibilities()
+{
+   std::array compatible_present_modes_list = {
+      present_mode_compatibility{ VK_PRESENT_MODE_FIFO_KHR, 1, { VK_PRESENT_MODE_FIFO_KHR } },
+      present_mode_compatibility{ VK_PRESENT_MODE_MAILBOX_KHR, 1, { VK_PRESENT_MODE_MAILBOX_KHR } },
+      present_mode_compatibility{ VK_PRESENT_MODE_IMMEDIATE_KHR, 1, { VK_PRESENT_MODE_IMMEDIATE_KHR } },
+      present_mode_compatibility{ VK_PRESENT_MODE_FIFO_LATEST_READY_EXT, 1, { VK_PRESENT_MODE_FIFO_LATEST_READY_EXT } }
+   };
+   m_compatible_present_modes =
+      compatible_present_modes<compatible_present_modes_list.size()>(compatible_present_modes_list);
+}
+
+surface_properties::surface_properties(surface *wsi_surface, const util::allocator &allocator)
+   : specific_surface(wsi_surface)
+   , supported_formats(allocator)
+   , m_supported_modes({ VK_PRESENT_MODE_FIFO_KHR, VK_PRESENT_MODE_MAILBOX_KHR, VK_PRESENT_MODE_IMMEDIATE_KHR,
+                         VK_PRESENT_MODE_FIFO_LATEST_READY_EXT })
+{
+   this->surface_properties::populate_present_mode_compatibilities();
+}
+
+surface_properties::surface_properties()
+   : surface_properties(nullptr, util::allocator::get_generic())
+{
+}
+
+surface_properties &surface_properties::get_instance()
+{
+   static surface_properties instance;
+   return instance;
+}
+
+VkResult surface_properties::get_surface_capabilities(VkPhysicalDevice physical_device,
+                                                      VkSurfaceCapabilitiesKHR *pSurfaceCapabilities)
+{
+   populate_surface_capabilities(physical_device, pSurfaceCapabilities, nullptr);
+   return VK_SUCCESS;
+}
+
+void surface_properties::populate_surface_capabilities(VkPhysicalDevice physical_device,
+                                                       VkSurfaceCapabilitiesKHR *pSurfaceCapabilities, void *pNext)
+{
+
+   /* Image count limits */
+   surface_properties_override_params override_params = { 2, 0 };
+   get_surface_capabilities_common(physical_device, pSurfaceCapabilities, &override_params, pNext);
+   const char *ahb = std::getenv("MAVK_WSI_AHB_ALLOC_ONLY");
+   if (ahb && std::strcmp(ahb, "1") == 0)
+   {
+      pSurfaceCapabilities->minImageCount=3;
+      pSurfaceCapabilities->maxImageArrayLayers=1;
+      pSurfaceCapabilities->supportedUsageFlags=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_SAMPLED_BIT|
+         VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+      pSurfaceCapabilities->supportedCompositeAlpha=VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+      return;
+   }
+
+   /* Composite alpha */
+   /* RK3588: advertise OPAQUE - emulated by dropping alpha at present time (ARGB->XRGB). */
+   pSurfaceCapabilities->supportedCompositeAlpha = static_cast<VkCompositeAlphaFlagsKHR>(
+      VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR | VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR |
+      VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR);
+}
+
+VkResult surface_properties::get_surface_capabilities(VkPhysicalDevice physical_device,
+                                                      const VkPhysicalDeviceSurfaceInfo2KHR *pSurfaceInfo,
+                                                      VkSurfaceCapabilities2KHR *pSurfaceCapabilities)
+{
+   TRY(check_surface_present_mode_query_is_supported(pSurfaceInfo, m_supported_modes));
+
+   /* Image count limits */
+   populate_surface_capabilities(physical_device, &pSurfaceCapabilities->surfaceCapabilities,
+                                 pSurfaceCapabilities->pNext);
+
+   m_compatible_present_modes.get_surface_present_mode_compatibility_common(pSurfaceInfo, pSurfaceCapabilities);
+
+   auto surface_scaling_capabilities = util::find_extension<VkSurfacePresentScalingCapabilitiesEXT>(
+      VK_STRUCTURE_TYPE_SURFACE_PRESENT_SCALING_CAPABILITIES_EXT, pSurfaceCapabilities);
+   if (surface_scaling_capabilities != nullptr)
+   {
+      get_surface_present_scaling_and_gravity(surface_scaling_capabilities);
+      surface_scaling_capabilities->minScaledImageExtent = pSurfaceCapabilities->surfaceCapabilities.minImageExtent;
+      surface_scaling_capabilities->maxScaledImageExtent = pSurfaceCapabilities->surfaceCapabilities.maxImageExtent;
+   }
+
+   auto present_id2_surface_cap = util::find_extension<VkSurfaceCapabilitiesPresentId2KHR>(
+      VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_PRESENT_ID_2_KHR, pSurfaceCapabilities->pNext);
+   if (present_id2_surface_cap != nullptr)
+   {
+      present_id2_surface_cap->presentId2Supported = VK_TRUE;
+   }
+
+   auto present_wait2_surface_cap = util::find_extension<VkSurfaceCapabilitiesPresentWait2KHR>(
+      VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_PRESENT_WAIT_2_KHR, pSurfaceCapabilities->pNext);
+   if (present_wait2_surface_cap != nullptr)
+   {
+      present_wait2_surface_cap->presentWait2Supported = VK_TRUE;
+   }
+
+#if VULKAN_WSI_LAYER_EXPERIMENTAL
+   populate_swapchain_supported_flags(physical_device, pSurfaceCapabilities,
+                                      VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR |
+                                         VK_SWAPCHAIN_CREATE_DEFERRED_MEMORY_ALLOCATION_BIT_KHR |
+                                         VK_SWAPCHAIN_CREATE_PRESENT_TIMING_BIT_EXT);
+#endif
+
+   return VK_SUCCESS;
+}
+
+static VkResult surface_format_properties_add_modifier_support(VkPhysicalDevice phys_dev,
+                                                               surface_format_properties &format_props,
+                                                               const util::drm::drm_format_pair &drm_format,
+                                                               bool add_compression = false)
+{
+   VkPhysicalDeviceExternalImageFormatInfoKHR external_info = {};
+   external_info.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_IMAGE_FORMAT_INFO_KHR;
+   external_info.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
+
+   VkPhysicalDeviceImageDrmFormatModifierInfoEXT drm_mod_info = {};
+   drm_mod_info.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_DRM_FORMAT_MODIFIER_INFO_EXT;
+   drm_mod_info.pNext = &external_info;
+   drm_mod_info.drmFormatModifier = drm_format.modifier;
+   drm_mod_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+   VkPhysicalDeviceImageFormatInfo2KHR image_info = {};
+   image_info.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2_KHR;
+   image_info.pNext = &drm_mod_info;
+   image_info.format = format_props.m_surface_format.format;
+   image_info.type = VK_IMAGE_TYPE_2D;
+   image_info.tiling = VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT;
+   image_info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+   if (add_compression)
+   {
+      return format_props.add_device_compression_support(phys_dev, image_info);
+   }
+
+   return format_props.check_device_support(phys_dev, image_info);
+}
+
+static VkResult surface_format_properties_map_add(VkPhysicalDevice phys_dev, surface_format_properties_map &format_map,
+                                                  VkFormat format, const util::drm::drm_format_pair &drm_format)
+{
+   surface_format_properties format_props{ format };
+   VkResult res = surface_format_properties_add_modifier_support(phys_dev, format_props, drm_format);
+   if (res == VK_SUCCESS)
+   {
+      auto it = format_map.try_insert(std::make_pair(format, format_props));
+      if (!it.has_value())
+      {
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+      }
+   }
+
+   if (res == VK_ERROR_FORMAT_NOT_SUPPORTED)
+   {
+      return VK_SUCCESS;
+   }
+
+   return res;
+}
+
+static VkResult surface_format_properties_map_init(VkPhysicalDevice phys_dev, surface_format_properties_map &format_map,
+                                                   const util::vector<util::drm::drm_format_pair> &drm_format_list)
+{
+   for (const auto &drm_format : drm_format_list)
+   {
+      const VkFormat vk_format = util::drm::drm_to_vk_format(drm_format.fourcc);
+      if (vk_format != VK_FORMAT_UNDEFINED && format_map.find(vk_format) == format_map.end())
+      {
+         TRY_LOG_CALL(surface_format_properties_map_add(phys_dev, format_map, vk_format, drm_format));
+      }
+      const VkFormat srgb_vk_format = util::drm::drm_to_vk_srgb_format(drm_format.fourcc);
+      if (srgb_vk_format != VK_FORMAT_UNDEFINED && format_map.find(srgb_vk_format) == format_map.end())
+      {
+         TRY_LOG_CALL(surface_format_properties_map_add(phys_dev, format_map, srgb_vk_format, drm_format));
+      }
+   }
+
+   return VK_SUCCESS;
+}
+
+static VkResult surface_format_properties_map_add_compression(
+   VkPhysicalDevice phys_dev, surface_format_properties_map &format_map,
+   const util::vector<util::drm::drm_format_pair> &drm_format_list)
+{
+   for (const auto &drm_format : drm_format_list)
+   {
+      const VkFormat vk_format = util::drm::drm_to_vk_format(drm_format.fourcc);
+      if (vk_format != VK_FORMAT_UNDEFINED)
+      {
+         auto entry = format_map.find(vk_format);
+         if (entry != format_map.end())
+         {
+            TRY_LOG_CALL(surface_format_properties_add_modifier_support(phys_dev, entry->second, drm_format, true));
+         }
+      }
+      const VkFormat srgb_vk_format = util::drm::drm_to_vk_srgb_format(drm_format.fourcc);
+      if (srgb_vk_format != VK_FORMAT_UNDEFINED)
+      {
+         auto entry = format_map.find(srgb_vk_format);
+         if (entry != format_map.end())
+         {
+            TRY_LOG_CALL(surface_format_properties_add_modifier_support(phys_dev, entry->second, drm_format, true));
+         }
+      }
+   }
+   return VK_SUCCESS;
+}
+
+VkResult surface_properties::get_surface_formats(VkPhysicalDevice physical_device, uint32_t *surfaceFormatCount,
+                                                 VkSurfaceFormatKHR *surfaceFormats,
+                                                 VkSurfaceFormat2KHR *extended_surface_formats)
+{
+   assert(specific_surface);
+   const char *ahb = std::getenv("MAVK_WSI_AHB_ALLOC_ONLY");
+   if (ahb && std::strcmp(ahb, "1") == 0 && !supported_formats.size())
+   {
+      surface_format_properties format{VK_FORMAT_R8G8B8A8_UNORM};
+      VkPhysicalDeviceExternalImageFormatInfo external{};
+      external.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_IMAGE_FORMAT_INFO;
+      external.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID;
+      VkPhysicalDeviceImageFormatInfo2 query{};
+      query.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2;
+      query.pNext = &external;
+      query.format = VK_FORMAT_R8G8B8A8_UNORM;
+      query.type = VK_IMAGE_TYPE_2D;
+      query.tiling = VK_IMAGE_TILING_OPTIMAL;
+      query.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+      TRY(format.check_device_support(physical_device, query));
+      if (!supported_formats.try_insert(std::make_pair(VK_FORMAT_R8G8B8A8_UNORM, format)))
+         return VK_ERROR_OUT_OF_HOST_MEMORY;
+      if (mavk_ahb_bgra_enabled() && mavk_ahb_bgra_supported(layer::instance_private_data::get(physical_device),physical_device))
+      {
+         surface_format_properties converted{VK_FORMAT_B8G8R8A8_UNORM};
+         query.pNext=nullptr; query.format=VK_FORMAT_B8G8R8A8_UNORM;
+         query.usage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+         TRY(converted.check_device_support(physical_device,query));
+         if (!supported_formats.try_insert(std::make_pair(VK_FORMAT_B8G8R8A8_UNORM,converted)))
+            return VK_ERROR_OUT_OF_HOST_MEMORY;
+      }
+   }
+   if (!supported_formats.size())
+   {
+      /* Only offer formats that also work for OPAQUE swapchains, which present through the format's
+       * alpha-less variant (see surface::get_formats_with_opaque_variant). */
+      const auto &drm_formats = specific_surface->get_formats_with_opaque_variant();
+      TRY_LOG_CALL(surface_format_properties_map_init(physical_device, supported_formats, drm_formats));
+      if (layer::instance_private_data::get(physical_device).has_image_compression_support(physical_device))
+      {
+         TRY_LOG_CALL(surface_format_properties_map_add_compression(physical_device, supported_formats, drm_formats));
+      }
+   }
+
+   return surface_properties_formats_helper(supported_formats.begin(), supported_formats.end(), surfaceFormatCount,
+                                            surfaceFormats, extended_surface_formats);
+}
+
+VkResult surface_properties::get_surface_present_modes(VkPhysicalDevice physical_device, VkSurfaceKHR surface,
+                                                       uint32_t *pPresentModeCount, VkPresentModeKHR *pPresentModes)
+{
+   UNUSED(physical_device);
+   UNUSED(surface);
+   const char *ahb = std::getenv("MAVK_WSI_AHB_ALLOC_ONLY");
+   if (ahb && std::strcmp(ahb, "1") == 0)
+   {
+      const std::array modes{VK_PRESENT_MODE_FIFO_KHR};
+      return get_surface_present_modes_common(pPresentModeCount, pPresentModes, modes);
+   }
+   return get_surface_present_modes_common(pPresentModeCount, pPresentModes, m_supported_modes);
+}
+
+VkResult surface_properties::get_required_device_extensions(util::extension_list &extension_list,
+                                                            const uint32_t api_version)
+{
+   VkResult result = VK_SUCCESS;
+   const char *ahb = std::getenv("MAVK_WSI_AHB_ALLOC_ONLY");
+   if (ahb && std::strcmp(ahb, "1") == 0)
+   {
+      const std::array ahb_extensions{VK_ANDROID_EXTERNAL_MEMORY_ANDROID_HARDWARE_BUFFER_EXTENSION_NAME,
+         VK_EXT_QUEUE_FAMILY_FOREIGN_EXTENSION_NAME, VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME,
+         VK_KHR_EXTERNAL_FENCE_FD_EXTENSION_NAME};
+      TRY(extension_list.add(ahb_extensions.data(), ahb_extensions.size()));
+      if (api_version < VK_API_VERSION_1_1)
+      {
+         const std::array dependencies{VK_KHR_BIND_MEMORY_2_EXTENSION_NAME,
+            VK_KHR_SAMPLER_YCBCR_CONVERSION_EXTENSION_NAME, VK_KHR_MAINTENANCE1_EXTENSION_NAME,
+            VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME, VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,
+            VK_KHR_EXTERNAL_FENCE_EXTENSION_NAME, VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME,
+            VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME};
+         TRY(extension_list.add(dependencies.data(), dependencies.size()));
+      }
+      std::fprintf(stderr, "MAVK_WSI_AHB_REQUIRED_API version=%u\n", api_version);
+      return VK_SUCCESS;
+   }
+   const std::array required_device_extensions{
+      VK_EXT_IMAGE_DRM_FORMAT_MODIFIER_EXTENSION_NAME, VK_KHR_IMAGE_FORMAT_LIST_EXTENSION_NAME,
+      VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME,   VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
+      VK_KHR_EXTERNAL_FENCE_FD_EXTENSION_NAME,         VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME,
+   };
+   result = extension_list.add(required_device_extensions.data(), required_device_extensions.size());
+   if (result != VK_SUCCESS)
+   {
+      return result;
+   }
+
+   /* Enable extensions that were promoted to core in Vulkan 1.1 when using API versions < 1.1 */
+   if (api_version < VK_API_VERSION_1_1)
+   {
+      const std::array required_extensions_pre_vulkan_1_1{
+         VK_KHR_BIND_MEMORY_2_EXTENSION_NAME,   VK_KHR_SAMPLER_YCBCR_CONVERSION_EXTENSION_NAME,
+         VK_KHR_MAINTENANCE1_EXTENSION_NAME,    VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME,
+         VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME, VK_KHR_EXTERNAL_FENCE_EXTENSION_NAME
+      };
+      result = extension_list.add(required_extensions_pre_vulkan_1_1.data(), required_extensions_pre_vulkan_1_1.size());
+   }
+
+   return result;
+}
+
+VkResult surface_properties::get_required_instance_extensions(util::extension_list &extension_list,
+                                                              const uint32_t api_version)
+{
+   VkResult result = VK_SUCCESS;
+   /* Enable extensions that were promoted to core in Vulkan 1.1 when using API versions < 1.1 */
+   if (api_version < VK_API_VERSION_1_1)
+   {
+      const std::array required_extensions_pre_vulkan_1_1{
+         VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
+         VK_KHR_EXTERNAL_FENCE_CAPABILITIES_EXTENSION_NAME,
+         VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME,
+         VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME,
+      };
+      result = extension_list.add(required_extensions_pre_vulkan_1_1.data(), required_extensions_pre_vulkan_1_1.size());
+   }
+   return result;
+}
+
+struct required_properties
+{
+   bool dmabuf;
+   bool explicit_sync;
+};
+
+VWL_CAPI_CALL(void)
+check_required_protocols(void *data, struct wl_registry *registry, uint32_t name, const char *interface,
+                         uint32_t version) VWL_API_POST
+{
+   UNUSED(registry);
+   UNUSED(name);
+   auto supported = static_cast<required_properties *>(data);
+
+   if (!strcmp(interface, zwp_linux_dmabuf_v1_interface.name) && version >= ZWP_LINUX_DMABUF_V1_MODIFIER_SINCE_VERSION)
+   {
+      supported->dmabuf = true;
+   }
+   else if (!strcmp(interface, zwp_linux_explicit_synchronization_v1_interface.name))
+   {
+      supported->explicit_sync = true;
+   }
+}
+
+static const wl_registry_listener registry_listener = { check_required_protocols, nullptr };
+
+static bool check_wl_protocols(struct wl_display *display)
+{
+   required_properties supported = {};
+
+   auto protocol_queue = wayland_owner<wl_event_queue>{ wl_display_create_queue(display) };
+   if (protocol_queue.get() == nullptr)
+   {
+      WSI_LOG_ERROR("Failed to create wl surface queue.");
+      return false;
+   }
+   auto display_proxy = make_proxy_with_queue(display, protocol_queue.get());
+   if (display_proxy == nullptr)
+   {
+      WSI_LOG_ERROR("Failed to create wl display proxy.");
+      return false;
+   };
+   auto registry = wayland_owner<wl_registry>{ wl_display_get_registry(display_proxy.get()) };
+   if (registry.get() == nullptr)
+   {
+      WSI_LOG_ERROR("Failed to get wl display registry.");
+      return false;
+   }
+
+   int res = wl_registry_add_listener(registry.get(), &registry_listener, &supported);
+   if (res < 0)
+   {
+      WSI_LOG_ERROR("Failed to add registry listener.");
+      return false;
+   }
+
+   res = wl_display_roundtrip_queue(display, protocol_queue.get());
+   if (res < 0)
+   {
+      WSI_LOG_ERROR("Roundtrip failed.");
+      return false;
+   }
+
+   /* RK3588: don't require explicit sync; the layer falls back to implicit (CPU fence) sync. */
+   return (supported.dmabuf /* && supported.explicit_sync */);
+}
+
+VWL_VKAPI_CALL(VkBool32)
+GetPhysicalDeviceWaylandPresentationSupportKHR(VkPhysicalDevice physical_device, uint32_t queue_index,
+                                               struct wl_display *display)
+{
+   UNUSED(queue_index);
+   bool dev_supports_sync =
+      sync_fd_fence_sync::is_supported(layer::instance_private_data::get(physical_device), physical_device);
+   if (!dev_supports_sync)
+   {
+      return VK_FALSE;
+   }
+
+   if (!check_wl_protocols(display))
+   {
+      return VK_FALSE;
+   }
+
+   return VK_TRUE;
+}
+
+VWL_VKAPI_CALL(VkResult)
+CreateWaylandSurfaceKHR(VkInstance instance, const VkWaylandSurfaceCreateInfoKHR *pCreateInfo,
+                        const VkAllocationCallbacks *pAllocator, VkSurfaceKHR *pSurface) VWL_API_POST
+{
+   auto &instance_data = layer::instance_private_data::get(instance);
+   util::allocator allocator{ instance_data.get_allocator(), VK_SYSTEM_ALLOCATION_SCOPE_OBJECT, pAllocator };
+   auto wsi_surface = surface::make_surface(allocator, pCreateInfo->display, pCreateInfo->surface);
+   if (wsi_surface == nullptr)
+   {
+      return VK_ERROR_OUT_OF_HOST_MEMORY;
+   }
+
+   if (!wsi_surface->created_by_icd_calldown())
+   {
+      auto owned = util::unique_ptr<wsi::surface>(std::move(wsi_surface));
+      *pSurface = reinterpret_cast<VkSurfaceKHR>(owned.get());
+      return instance_data.add_surface(*pSurface, owned);
+   }
+
+   VkResult res = instance_data.disp.CreateWaylandSurfaceKHR(instance, pCreateInfo, pAllocator, pSurface);
+   if (res == VK_SUCCESS)
+   {
+      auto surface_base = util::unique_ptr<wsi::surface>(std::move(wsi_surface));
+      res = instance_data.add_surface(*pSurface, surface_base);
+      if (res != VK_SUCCESS)
+      {
+         instance_data.disp.DestroySurfaceKHR(instance, *pSurface, pAllocator);
+      }
+   }
+   return res;
+}
+
+PFN_vkVoidFunction surface_properties::get_proc_addr(const char *name)
+{
+   if (strcmp(name, "vkGetPhysicalDeviceWaylandPresentationSupportKHR") == 0)
+   {
+      return reinterpret_cast<PFN_vkVoidFunction>(GetPhysicalDeviceWaylandPresentationSupportKHR);
+   }
+   else if (strcmp(name, "vkCreateWaylandSurfaceKHR") == 0)
+   {
+      return reinterpret_cast<PFN_vkVoidFunction>(CreateWaylandSurfaceKHR);
+   }
+   return nullptr;
+}
+
+bool surface_properties::is_surface_extension_enabled(const layer::instance_private_data &instance_data)
+{
+   return instance_data.is_instance_extension_enabled(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
+}
+
+void surface_properties::get_surface_present_scaling_and_gravity(
+   VkSurfacePresentScalingCapabilitiesEXT *scaling_capabilities)
+{
+   scaling_capabilities->supportedPresentScaling = VK_PRESENT_SCALING_ONE_TO_ONE_BIT_EXT;
+   scaling_capabilities->supportedPresentGravityX = VK_PRESENT_GRAVITY_MIN_BIT_EXT;
+   scaling_capabilities->supportedPresentGravityY = VK_PRESENT_GRAVITY_MIN_BIT_EXT;
+}
+
+bool surface_properties::is_compatible_present_modes(VkPresentModeKHR present_mode_a, VkPresentModeKHR present_mode_b)
+{
+   return m_compatible_present_modes.is_compatible_present_modes(present_mode_a, present_mode_b);
+}
+
+VkResult surface_properties::get_present_timing_surface_caps_internal(
+   VkPhysicalDevice physical_device, VkPresentTimingSurfaceCapabilitiesEXT *present_timing_surface_caps)
+{
+   present_timing_surface_caps->presentTimingSupported = VK_TRUE;
+   present_timing_surface_caps->presentAtAbsoluteTimeSupported = VK_FALSE;
+   present_timing_surface_caps->presentAtRelativeTimeSupported = VK_FALSE;
+   present_timing_surface_caps->presentStageQueries = VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT;
+
+   /* The extension supports scheduling targets only on FIFO & FIFO_RELAXED modes. We currently only have
+      support for scheduling presents when using the presentation thread. While FIFO runs on Wayland in
+      threaded mode, FIFO_RELAXED does not. If you are setting presentAtAbsoluteTimeSupported or
+      presentAtRelativeTimeSupported to VK_TRUE, make sure to check that swapchain cannot be created
+      with present timing support on present modes that
+      do not use presentation thread unless support has been added in other ways. */
+
+   if (specific_surface->get_presentation_time_interface() != nullptr)
+   {
+      bool clock_domain_supported = true;
+      VkTimeDomainKHR image_first_pixel_out_time_domain;
+
+      /* Check if we can support any of the reported time domains */
+      switch (specific_surface->clockid())
+      {
+      case CLOCK_MONOTONIC:
+         image_first_pixel_out_time_domain = VK_TIME_DOMAIN_CLOCK_MONOTONIC_KHR;
+         break;
+      case CLOCK_MONOTONIC_RAW:
+         image_first_pixel_out_time_domain = VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_KHR;
+         break;
+      default:
+         clock_domain_supported = false;
+         break;
+      }
+
+      if (clock_domain_supported)
+      {
+         std::tuple<VkTimeDomainEXT, bool> monotonic_query = { image_first_pixel_out_time_domain, false };
+         TRY(wsi::check_time_domain_support(physical_device, &monotonic_query, 1));
+
+         if (std::get<1>(monotonic_query))
+         {
+            present_timing_surface_caps->presentStageQueries |= VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT;
+         }
+      }
+   }
+
+   return VK_SUCCESS;
+}
+
+} // namespace wayland
+} // namespace wsi

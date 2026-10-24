@@ -1,0 +1,6 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.mavk.selectioncheck">
+    <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="36" />
+    <application android:label="Mavk selection check" android:debuggable="true" android:hasCode="true" />
+    <instrumentation android:name="com.mavk.selectioncheck.AhbSelectionCheck"
+        android:targetPackage="com.droiddeck.launcher.mavk" android:functionalTest="true" />
+</manifest>

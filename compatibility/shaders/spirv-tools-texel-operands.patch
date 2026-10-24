@@ -1,0 +1,27 @@
+--- a/source/opt/inst_bindless_check_pass.cpp
++++ b/source/opt/inst_bindless_check_pass.cpp
+@@ -714,11 +714,20 @@
+-  // Only process OpImageRead and OpImageWrite with no optional operands
++  // Mavk: common no-argument image operands must not disable texel bounds.
++  // The guarded clone retains the original mask,including integer extension.
++  // Scoped/memory-model operands remain outside this bounded admission slice.
+   Instruction* ref_inst = &*ref_inst_itr;
+   SpvOp op = ref_inst->opcode();
+   uint32_t num_in_oprnds = ref_inst->NumInOperands();
+-  if (!((op == SpvOpImageRead && num_in_oprnds == 2) ||
+-        (op == SpvOpImageFetch && num_in_oprnds == 2) ||
+-        (op == SpvOpImageWrite && num_in_oprnds == 3)))
++  const uint32_t base_operands = op == SpvOpImageWrite ? 3u : 2u;
++  if (op != SpvOpImageRead && op != SpvOpImageFetch && op != SpvOpImageWrite)
+     return;
++  if (num_in_oprnds != base_operands) {
++    const uint32_t supported = SpvImageOperandsSignExtendMask |
++                               SpvImageOperandsZeroExtendMask |
++                               SpvImageOperandsNontemporalMask;
++    if (num_in_oprnds != base_operands + 1 ||
++        (ref_inst->GetSingleWordInOperand(base_operands) & ~supported))
++      return;
++  }
+   // Pull components from descriptor reference
+   RefAnalysis ref;
+   if (!AnalyzeDescriptorReference(ref_inst, &ref)) return;

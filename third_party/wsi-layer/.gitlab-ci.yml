@@ -1,0 +1,224 @@
+# Copyright (c) 2019-2025 Arm Limited.
+#
+# SPDX-License-Identifier: MIT
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to
+# deal in the Software without restriction, including without limitation the
+# rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+# sell copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+stages: [lint, build]
+
+# Shared setup: toolchain + Vulkan Loader/Headers
+.vulkan_loader_setup: &vulkan_loader_setup
+  - set -euo pipefail
+  - pwd
+  - uname -a
+  # Retry a few times on transient mirror/metadata issues
+  - |
+    max_tries=6
+    for i in $(seq 1 "$max_tries"); do
+      dnf -y --refresh --best --setopt=install_weak_deps=False install \
+        make cmake gcc gcc-c++ python3 git clang clang-tools-extra \
+        pkgconf-pkg-config \
+        'pkgconfig(x11)' 'pkgconfig(xrandr)' 'pkgconfig(xcb)' 'pkgconfig(x11-xcb)' \
+        'pkgconfig(xkbcommon)' 'pkgconfig(wayland-client)' && break || {
+          echo "DNF install attempt $i/$max_tries failed; retrying in 10s."; sleep 10;
+        }
+    done
+    if [ "$i" -eq "$max_tries" ]; then
+      echo "DNF failed after $max_tries attempts"; exit 1;
+    fi
+  - clang-tidy --version || true
+  - gcc --version || true
+  - cmake --version || true
+  - mkdir -p /build
+  - pushd /build
+  - git clone --depth=1 https://github.com/KhronosGroup/Vulkan-Loader.git
+  - cd Vulkan-Loader
+  - mkdir -p build && cd build
+  - ../scripts/update_deps.py --cmake_var VULKAN_HEADERS_ENABLE_MODULE=OFF
+  - cmake -C helper.cmake ..
+  - make -j"$(nproc)"
+  - make install
+  - popd
+
+pre-commit:
+  stage: lint
+  image: python:3.10-bookworm
+  rules:
+    - if: $CI_MERGE_REQUEST_DIFF_BASE_SHA
+  before_script:
+    - apt-get update
+    - DEBIAN_FRONTEND=noninteractive apt-get install -y git
+  script:
+    - pip install pre-commit
+    - echo Using $CI_MERGE_REQUEST_DIFF_BASE_SHA as Pre-commit base
+    - pre-commit run --show-diff-on-failure --from-ref "$CI_MERGE_REQUEST_DIFF_BASE_SHA" --to-ref HEAD
+
+clang_tidy:
+  stage: lint
+  image: "registry.fedoraproject.org/fedora"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  before_script:
+    - *vulkan_loader_setup
+  script:
+    # Generate compile_commands.json (no build needed)
+    - mkdir -p build
+    - >
+      cmake -S . -B build
+      -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+      -DVULKAN_CXX_INCLUDE=/build/Vulkan-Loader/build/Vulkan-Headers/build/install/include
+    - test -f build/compile_commands.json || { echo "compile_commands.json missing"; exit 2; }
+    # Run clang-tidy across all TUs in the DB; restrict diagnostics to this repo
+    - set +e
+    - set -o pipefail
+    - |
+      run-clang-tidy -p build -j "$(nproc)" -quiet \
+      -extra-arg=-Wnewline-eof -header-filter="$(pwd)/.*" \
+      -checks='*,
+      -bugprone-easily-swappable-parameters,
+      -bugprone-exception-escape,
+      -bugprone-implicit-widening-of-multiplication-result,
+      -bugprone-sizeof-expression,
+      -bugprone-suspicious-stringview-data-usage,
+      -bugprone-use-after-move,
+
+      -cert-dcl50-cpp,
+      -cert-err33-c,
+      -cert-err58-cpp,
+
+      -clang-analyzer-optin.performance.Padding,
+
+      -concurrency-mt-unsafe,
+
+      -cppcoreguidelines-avoid-c-arrays,
+      -cppcoreguidelines-avoid-const-or-ref-data-members,
+      -cppcoreguidelines-avoid-do-while,
+      -cppcoreguidelines-avoid-magic-numbers,
+      -cppcoreguidelines-avoid-non-const-global-variables,
+      -cppcoreguidelines-explicit-virtual-functions,
+      -cppcoreguidelines-init-variables,
+      -cppcoreguidelines-macro-usage,
+      -cppcoreguidelines-non-private-member-variables-in-classes,
+      -cppcoreguidelines-no-malloc,
+      -cppcoreguidelines-noexcept-move-operations,
+      -cppcoreguidelines-owning-memory,
+      -cppcoreguidelines-prefer-member-initializer,
+      -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+      -cppcoreguidelines-pro-bounds-constant-array-index,
+      -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+      -cppcoreguidelines-pro-type-const-cast,
+      -cppcoreguidelines-pro-type-cstyle-cast,
+      -cppcoreguidelines-pro-type-member-init,
+      -cppcoreguidelines-pro-type-reinterpret-cast,
+      -cppcoreguidelines-pro-type-union-access,
+      -cppcoreguidelines-pro-type-vararg,
+      -cppcoreguidelines-special-member-functions,
+      -cppcoreguidelines-use-default-member-init,
+
+      -hicpp-avoid-c-arrays,
+      -hicpp-braces-around-statements,
+      -hicpp-explicit-conversions,
+      -hicpp-invalid-access-moved,
+      -hicpp-member-init,
+      -hicpp-named-parameter,
+      -hicpp-no-array-decay,
+      -hicpp-no-malloc,
+      -hicpp-noexcept-move,
+      -hicpp-signed-bitwise,
+      -hicpp-special-member-functions,
+      -hicpp-uppercase-literal-suffix,
+      -hicpp-use-equals-default,
+      -hicpp-use-equals-delete,
+      -hicpp-use-nullptr,
+      -hicpp-use-override,
+      -hicpp-vararg,
+
+      -misc-const-correctness,
+      -misc-include-cleaner,
+      -misc-misplaced-const,
+      -misc-non-private-member-variables-in-classes,
+      -misc-use-anonymous-namespace,
+      -misc-use-internal-linkage,
+
+      -performance-enum-size,
+      -performance-noexcept-move-constructor,
+
+      -readability-avoid-const-params-in-decls,
+      -readability-braces-around-statements,
+      -readability-container-data-pointer,
+      -readability-container-size-empty,
+      -readability-const-return-type,
+      -readability-convert-member-functions-to-static,
+      -readability-else-after-return,
+      -readability-function-cognitive-complexity,
+      -readability-identifier-length,
+      -readability-implicit-bool-conversion,
+      -readability-inconsistent-declaration-parameter-name,
+      -readability-magic-numbers,
+      -readability-make-member-function-const,
+      -readability-named-parameter,
+      -readability-qualified-auto,
+      -readability-redundant-member-init,
+      -readability-simplify-boolean-expr,
+      -readability-uppercase-literal-suffix,
+
+      -altera-*,
+      -boost-*,
+      -fuchsia-*,
+      -google-*,
+      -llvm-*,
+      -llvmlibc-*,
+      -modernize-*' \
+      | tee clang-tidy.log
+    - set -e
+    # Fail if any warnings/errors were emitted for repo files
+    - |
+      if grep -E "^(.*):[0-9]+:[0-9]+: (warning|error):" clang-tidy.log >/dev/null; then
+        echo "clang-tidy found issues. See clang-tidy.log"; exit 1
+      fi
+  allow_failure: false
+  artifacts:
+    when: always
+    paths:
+      - clang-tidy.log
+      - build/compile_commands.json
+
+build_vulkan_wsi_layer:
+  stage: build
+  image: "registry.fedoraproject.org/fedora"
+  # Build on MRs, default branch, and tags (so tag pipelines perform a build)
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+  before_script:
+    - *vulkan_loader_setup
+  script:
+    - pwd
+    - mkdir -p build
+    - cd build
+    - cmake .. -DVULKAN_CXX_INCLUDE=/build/Vulkan-Loader/build/Vulkan-Headers/build/install/include
+    - make -j"$(nproc)"

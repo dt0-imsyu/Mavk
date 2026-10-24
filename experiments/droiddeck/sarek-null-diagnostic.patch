@@ -1,0 +1,30 @@
+diff --git a/src/dxvk/dxvk_device_info.cpp b/src/dxvk/dxvk_device_info.cpp
+--- a/src/dxvk/dxvk_device_info.cpp
++++ b/src/dxvk/dxvk_device_info.cpp
+@@ -19,6 +19,12 @@ namespace dxvk {
+     return enabled;
+   }
+ 
++  // Local diagnostic admission ONLY. Never changes queried/enabled features.
++  static bool mavkNullProbe() {
++    static const bool enabled = env::getEnvVar("MAVK_SAREK_NULL_PROBE") == "1";
++    return enabled;
++  }
++
+   #define CORE_VERSIONS                            \
+     HANDLE_CORE(vk11);                             \
+     HANDLE_CORE(vk12);                             \
+@@ -661,2 +667,4 @@ namespace dxvk {
+   void DxvkDeviceCapabilities::enableFeaturesAndExtensions() {
++    if (mavkNullProbe())
++      Logger::warn("MAVK DIAGNOSTIC: nullDescriptor admission optional; unsupported feature remains FALSE; NOT Vulkan correctness support");
+     // Some extensions functionally work as "physical device" extensions
+@@ -1015,7 +1023,7 @@ namespace dxvk {
+       /* Robustness, all features effectively required for correctness */
+       ENABLE_EXT_FEATURE(extRobustness2, robustBufferAccess2, false),
+       ENABLE_EXT_FEATURE(extRobustness2, robustImageAccess2, false),
+-      ENABLE_EXT_FEATURE(extRobustness2, nullDescriptor, true),
++      ENABLE_EXT_FEATURE(extRobustness2, nullDescriptor, !mavkNullProbe()),
+ 
+       /* Sample locations, used to "disable" MSAA rendering */
+       ENABLE_EXT(extSampleLocations, false),

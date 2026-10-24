@@ -32,10 +32,17 @@ std::string nullBuffersGate(const std::vector<uint32_t>& code,bool validated,Val
         mavk::Shader shader(context,code.data(),code.size()*4);
         VkComputePipelineCreateInfo pc{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};pc.layout=adapter.pipelineLayout();pc.stage={VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};pc.stage.stage=VK_SHADER_STAGE_COMPUTE_BIT;pc.stage.module=shader.handle();pc.stage.pName="main";
         mavk::Pipeline pipeline(context,pc);mavk::CommandBatch command(context);mavk::Fence fence(context);
+        mavk::compat::NullBufferResources nullBuffers(context);
+        std::shared_ptr<const void> nullLease;VkBuffer nullHandle{};
         auto resolver=[&](const mavk::compat::DescriptorBinding& binding,uint32_t index,const mavk::compat::DescriptorValue& v){
+            if(v.status==mavk::compat::DescriptorStatus::Null){
+                auto r=nullBuffers.resolve(binding,v);
+                if(nullLease&&(nullLease!=r.owner||nullHandle!=r.buffer.buffer))throw std::runtime_error("null backing cache/lifetime changed");
+                nullLease=r.owner;nullHandle=r.buffer.buffer;return r;
+            }
             std::shared_ptr<const mavk::Buffer> owner;
             if(v.status==mavk::compat::DescriptorStatus::Bound){if(multiSet)return mavk::compat::VulkanDescriptorResources::resolve(binding,index,v);owner=std::static_pointer_cast<const mavk::Buffer>(v.owner);}
-            else owner=binding.binding==0?(index?rightOwner:leftOwner):binding.binding==1?outputOwner:(index?uniform1Owner:uniform0Owner);
+            else throw std::runtime_error("unwritten buffer descriptor reached native resolver");
             mavk::compat::NativeDescriptorResource r;r.owner=owner;r.bufferBytes=owner->size();r.buffer={owner->handle(),v.status==mavk::compat::DescriptorStatus::Bound?v.offset:0,v.status==mavk::compat::DescriptorStatus::Bound?v.range:binding.binding==0?256u:binding.binding==1?2048u:16u};return r;
         };
         // Same shader, same descriptors. Only metadata switches logical nulls.
@@ -63,6 +70,8 @@ std::string nullBuffersGate(const std::vector<uint32_t>& code,bool validated,Val
             command.hostReadBarrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,VK_ACCESS_SHADER_WRITE_BIT);vkCmdWriteTimestamp(cmd,VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,root.query,1);command.end();
             VkSubmitInfo submit{VK_STRUCTURE_TYPE_SUBMIT_INFO};auto handle=command.handle();submit.commandBufferCount=1;submit.pCommandBuffers=&handle;ok(context.submit(root.queue,submit,fence.handle()),"null submit");auto waited=fence.wait(5'000'000'000ull);if(waited!=VK_SUCCESS)vkDeviceWaitIdle(root.device);ok(waited,"null bounded fence");
             left.invalidate();right.invalidate();output.invalidate();auto events=native->readDiagnostics();
+            auto zero=std::const_pointer_cast<mavk::Buffer>(std::static_pointer_cast<const mavk::Buffer>(nullLease));zero->invalidate();
+            const auto zeros=static_cast<const uint32_t*>(zero->map());for(unsigned i=0;i<4;i++)if(zeros[i])throw std::runtime_error("guarded null write/atomic leaked to device-owned backing");
             for(unsigned i=0;i<64;i++){
                 uint32_t expected[]={phase?0xA000+i:0,phase?0:0xB000+i,phase?0x1234u:0,phase?0:0x5678u,0,0,i,0xFACE};
                 if(atomics){expected[6]=phase?0xDEAD0000+i:0;expected[7]=phase?0:0xB003+i;}

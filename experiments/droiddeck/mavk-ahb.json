@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "library_sha256": "99a12d70e88e14babcf27ad8dcb22804334a9e769bce2dcc89c7c5646096e663",
+  "present_modes": ["fifo"],
+  "min_images": 3,
+  "bgra8_gpu_blit": true,
+  "experimental": true,
+  "scope": "single fullscreen window; native image capabilities checked at allocation"
+}

@@ -1,0 +1,24 @@
+#version 450
+layout(local_size_x=1) in;
+layout(set=0,binding=0) uniform usamplerBuffer u;
+layout(set=0,binding=1) uniform isamplerBuffer i;
+layout(set=0,binding=2) uniform samplerBuffer f;
+layout(r32ui,set=1,binding=0) uniform uimageBuffer su;
+layout(r32i,set=1,binding=1) uniform iimageBuffer si;
+layout(r32f,set=1,binding=2) uniform imageBuffer sf;
+layout(set=2,binding=0) uniform sampler2D other;
+layout(set=2,binding=1,std430) buffer Result { uint value; } result;
+layout(set=2,binding=2) uniform sampler1D gammaImage;
+layout(set=2,binding=3) uniform sampler2DArray layeredImage;
+layout(set=2,binding=4) uniform sampler3D volumeImage;
+layout(set=2,binding=5) uniform samplerCube cubeImage;
+layout(set=2,binding=6) uniform sampler2DShadow depthImage;
+layout(set=2,binding=7) uniform samplerCubeArray cubeArrayImage;
+void main(){
+    result.value=texelFetch(u,0).x+uint(texelFetch(i,0).x)+uint(texelFetch(f,0).x)
+      +imageLoad(su,0).x+uint(imageLoad(si,0).x)+uint(imageLoad(sf,0).x)
+      +uint(textureLod(other,vec2(0),0).x)+uint(textureLod(gammaImage,0.0,0).x)
+      +uint(textureLod(layeredImage,vec3(0),0).x)+uint(textureLod(volumeImage,vec3(0),0).x)
+      +uint(textureLod(cubeImage,vec3(1),0).x)+uint(textureLod(depthImage,vec3(0),0))
+      +uint(textureLod(cubeArrayImage,vec4(1),0).x);
+}

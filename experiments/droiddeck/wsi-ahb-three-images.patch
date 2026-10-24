@@ -1,0 +1,7 @@
+diff --git a/wsi/wayland/surface_properties.cpp b/wsi/wayland/surface_properties.cpp
+--- a/wsi/wayland/surface_properties.cpp
++++ b/wsi/wayland/surface_properties.cpp
+@@ -107,2 +107,3 @@
+    {
++      pSurfaceCapabilities->minImageCount=3;
+       pSurfaceCapabilities->maxImageArrayLayers=1;

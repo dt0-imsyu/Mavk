@@ -1,0 +1,36 @@
+; Both valid buffer accesses deliberately use two AccessChains.
+OpCapability Shader
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %main "main"
+OpExecutionMode %main LocalSize 1 1 1
+OpDecorate %array ArrayStride 4
+OpMemberDecorate %block 0 Offset 0
+OpDecorate %block Block
+OpDecorate %input DescriptorSet 0
+OpDecorate %input Binding 0
+OpDecorate %output DescriptorSet 0
+OpDecorate %output Binding 1
+%void = OpTypeVoid
+%function = OpTypeFunction %void
+%uint = OpTypeInt 32 0
+%zero = OpConstant %uint 0
+%index = OpConstant %uint 17
+%array = OpTypeRuntimeArray %uint
+%block = OpTypeStruct %array
+%blockptr = OpTypePointer StorageBuffer %block
+%arrayptr = OpTypePointer StorageBuffer %array
+%uintptr = OpTypePointer StorageBuffer %uint
+%input = OpVariable %blockptr StorageBuffer
+%output = OpVariable %blockptr StorageBuffer
+%main = OpFunction %void None %function
+%entry = OpLabel
+%inarray = OpAccessChain %arrayptr %input %zero
+%invalue = OpAccessChain %uintptr %inarray %index
+%value = OpLoad %uint %invalue
+%outarray = OpAccessChain %arrayptr %output %zero
+%outvalue = OpAccessChain %uintptr %outarray %zero
+OpStore %outvalue %value
+%outofbounds = OpAccessChain %uintptr %outarray %index
+OpStore %outofbounds %index
+OpReturn
+OpFunctionEnd

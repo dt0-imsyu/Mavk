@@ -10,6 +10,21 @@ int main(){try{
     auto a=handle<VkBuffer>(1),b=handle<VkBuffer>(2);auto view=handle<VkImageView>(3);auto sampler=handle<VkSampler>(4);
     resources.registerBuffer(a,1024,VK_BUFFER_USAGE_STORAGE_BUFFER_BIT|VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,owner);resources.registerBuffer(b,2048,VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,owner);
     resources.registerImageView(view,VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_STORAGE_BIT,owner);resources.registerSampler(sampler,owner);
+    {
+        auto depth=handle<VkImageView>(40),stencil=handle<VkImageView>(41);
+        resources.registerImageView(depth,VK_IMAGE_USAGE_SAMPLED_BIT,owner,VK_IMAGE_ASPECT_DEPTH_BIT);
+        resources.registerImageView(stencil,VK_IMAGE_USAGE_SAMPLED_BIT,owner,VK_IMAGE_ASPECT_STENCIL_BIT);
+        VkDescriptorImageInfo d{sampler,depth,VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL};
+        check(resources.image(d,DescriptorKind::SampledImage)->imageLayout==d.imageLayout);
+        d.imageLayout=VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL;check(resources.image(d,DescriptorKind::CombinedImageSampler)->view==depth);
+        d.imageView=stencil;reject([&]{resources.image(d,DescriptorKind::SampledImage);});
+        d.imageLayout=VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL;check(resources.image(d,DescriptorKind::SampledImage)->view==stencil);
+        d.imageView=view;reject([&]{resources.image(d,DescriptorKind::SampledImage);});
+        d.imageLayout=VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL;check(resources.image(d,DescriptorKind::SampledImage)->view==view);
+        reject([&]{resources.image(d,DescriptorKind::StorageImage);});
+        d.imageLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;reject([&]{resources.image(d,DescriptorKind::SampledImage);});
+        resources.unregisterImageView(depth);resources.unregisterImageView(stencil);
+    }
     VulkanDescriptorUpdates updates(resources,{16,8},true);auto one=handle<VkDescriptorSet>(10),two=handle<VkDescriptorSet>(11),blank=handle<VkDescriptorSet>(12);
     VkDescriptorSetLayoutBinding bindings[]={{0,VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,2,VK_SHADER_STAGE_COMPUTE_BIT,nullptr},{1,VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,1,VK_SHADER_STAGE_COMPUTE_BIT,nullptr},{2,VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,2,VK_SHADER_STAGE_COMPUTE_BIT,nullptr}};
     VkDescriptorSetLayoutCreateInfo layout{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};layout.bindingCount=3;layout.pBindings=bindings;updates.registerSet(one,layout);updates.registerSet(two,layout);updates.registerSet(blank,layout);

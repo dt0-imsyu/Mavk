@@ -1,0 +1,12 @@
+#version 450
+#extension GL_EXT_scalar_block_layout : require
+#ifndef READ_INDEX
+#define READ_INDEX 1
+#endif
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) uniform Input {uint values[8];} inputData;
+layout(std430,set=0,binding=1) buffer Output {uint values[];} outputData;
+void main() {
+    outputData.values[0]=inputData.values[READ_INDEX];
+    outputData.values[3]=1234;
+}

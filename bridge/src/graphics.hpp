@@ -16,6 +16,12 @@ struct RasterOptions {
     // Mutually exclusive with sourceOver; never substitute either equation.
     bool uiOverlayAlpha=false;
     uint32_t sampledBinding=1;
+    // Optional native GS; caller enables geometryShader on the borrowed device.
+    std::vector<uint32_t> geometryShader;
+    // Optional native TCS/TES pair; caller enables tessellationShader.
+    std::vector<uint32_t> tessellationControlShader,tessellationEvaluationShader;
+    uint32_t patchControlPoints=3;
+    VkShaderStageFlags uniformStages=VK_SHADER_STAGE_VERTEX_BIT;
 };
 struct LayerFrame {
     const void* push=nullptr;

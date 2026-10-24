@@ -5,6 +5,10 @@
 #include <mavk/compat/descriptors.hpp>
 #include <mavk/compat/native_descriptors.hpp>
 #include <mavk/compat/vulkan_descriptor_updates.hpp>
+#include <mavk/compat/null_buffers.hpp>
+#include <mavk/compat/null_texels.hpp>
+#include <mavk/compat/null_images.hpp>
+#include <mavk/compat/shader_descriptors.hpp>
 #ifdef MAVK_RUNTIME_GUARDS
 #include <mavk/compat/shader_guards.hpp>
 #endif
@@ -20,6 +24,7 @@
 #include <cmath>
 #include <cstring>
 #include <algorithm>
+#include "../../compatibility/test/layer-immutable.hpp"
 #ifdef MAVK_NATIVE_UI
 #include <imgui.h>
 #endif
@@ -65,6 +70,7 @@ struct Root {
 #include "null_buffers_comparison.hpp"
 #include "null_images_comparison.hpp"
 #include "null_texels_comparison.hpp"
+#include "separate_samplers_comparison.hpp"
 #include "descriptor_generation_comparison.hpp"
 #include "timeline_comparison.hpp"
 #include "reuse_comparison.hpp"
@@ -169,6 +175,22 @@ extern "C" JNIEXPORT jstring JNICALL Java_org_mavk_probe_CoreComparisonActivity_
         if(validation.errors.load()||validation.warnings.load())throw std::runtime_error("Sampled validation errors/warnings");
     }catch(const std::exception& e){result="{\"result\":\"FAIL\",\"error\":"+quote(e.what())+"}";}
     result.insert(result.rfind('}'),validation.fields());
+    const char* path=env->GetStringUTFChars(destination,nullptr);{std::ofstream f(path);f<<result;if(!f)result="REPORT_WRITE_FAILED";}env->ReleaseStringUTFChars(destination,path);return env->NewStringUTF(result.c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL Java_org_mavk_probe_CoreComparisonActivity_runNativeImmutableSamplers(JNIEnv* env,jclass,jbyteArray input,jstring destination,jboolean validated,jboolean copyControl){
+    ValidationCapture validation;std::string error,device;bool zero=false,pass=false;
+    std::unique_ptr<Root> root;std::unique_ptr<mavk::DeviceContext> context;
+    try{
+        jsize bytes=env->GetArrayLength(input);if(bytes<20||bytes>65536||bytes%4)throw std::runtime_error("immutable shader bytes");std::vector<uint32_t> code(bytes/4);env->GetByteArrayRegion(input,0,bytes,reinterpret_cast<jbyte*>(code.data()));
+        root=std::make_unique<Root>(validation);root->init(validated);device=root->properties.deviceName;
+        context=std::make_unique<mavk::DeviceContext>(root->physical,root->device,root->family);
+        struct NativeRoot {VkDevice device;VkQueue queue;} native{root->device,root->queue};
+        immutableSamplers(native,*context,code,copyControl);pass=true;
+    }catch(const std::exception& e){error=e.what();}
+    if(context)zero=context->counters().empty();context.reset();root.reset();
+    pass=pass&&zero&&!validation.errors.load()&&!validation.warnings.load();
+    std::string result="{\"result\":"+quote(pass?"NATIVE_IMMUTABLE_SAMPLERS_PASS":"NATIVE_IMMUTABLE_SAMPLERS_FAIL")+",\"device\":"+quote(device)+",\"error\":"+quote(error)+",\"core_live_zero\":"+(zero?"true":"false")+",\"copy_control\":"+(copyControl?"true":"false")+",\"verified_components\":"+(pass?"192":"0")+validation.fields()+"}";
     const char* path=env->GetStringUTFChars(destination,nullptr);{std::ofstream f(path);f<<result;if(!f)result="REPORT_WRITE_FAILED";}env->ReleaseStringUTFChars(destination,path);return env->NewStringUTF(result.c_str());
 }
 
@@ -293,9 +315,9 @@ extern "C" JNIEXPORT jstring JNICALL Java_org_mavk_probe_CoreComparisonActivity_
     result.insert(result.rfind('}'),validation.fields());const char* path=env->GetStringUTFChars(destination,nullptr);{std::ofstream f(path);f<<result;if(!f)result="REPORT_WRITE_FAILED";}env->ReleaseStringUTFChars(destination,path);return env->NewStringUTF(result.c_str());
 }
 
-extern "C" JNIEXPORT jstring JNICALL Java_org_mavk_probe_CoreComparisonActivity_runNullImages(JNIEnv* env,jclass,jbyteArray input,jstring destination,jboolean validated){
+extern "C" JNIEXPORT jstring JNICALL Java_org_mavk_probe_CoreComparisonActivity_runNullImages(JNIEnv* env,jclass,jbyteArray input,jstring destination,jboolean validated,jboolean liveArrays){
     ValidationCapture validation;std::string result;
-    try{jsize bytes=env->GetArrayLength(input);if(bytes<20||bytes>65536||bytes%4)throw std::runtime_error("null image shader bytes");std::vector<uint32_t> words(bytes/4);env->GetByteArrayRegion(input,0,bytes,reinterpret_cast<jbyte*>(words.data()));result=nullImagesGate(words,validated,validation);if(validation.errors.load()||validation.warnings.load())throw std::runtime_error("null image validation errors/warnings");}
+    try{jsize bytes=env->GetArrayLength(input);if(bytes<20||bytes>65536||bytes%4)throw std::runtime_error("null image shader bytes");std::vector<uint32_t> words(bytes/4);env->GetByteArrayRegion(input,0,bytes,reinterpret_cast<jbyte*>(words.data()));result=nullImagesGate(words,validated,validation,liveArrays);if(validation.errors.load()||validation.warnings.load())throw std::runtime_error("null image validation errors/warnings");}
     catch(const std::exception& e){result="{\"result\":\"FAIL\",\"error\":"+quote(e.what())+"}";}
     result.insert(result.rfind('}'),validation.fields());const char* path=env->GetStringUTFChars(destination,nullptr);{std::ofstream f(path);f<<result;if(!f)result="REPORT_WRITE_FAILED";}env->ReleaseStringUTFChars(destination,path);return env->NewStringUTF(result.c_str());
 }
@@ -303,6 +325,13 @@ extern "C" JNIEXPORT jstring JNICALL Java_org_mavk_probe_CoreComparisonActivity_
 extern "C" JNIEXPORT jstring JNICALL Java_org_mavk_probe_CoreComparisonActivity_runNullTexels(JNIEnv* env,jclass,jbyteArray input,jstring destination,jboolean validated){
     ValidationCapture validation;std::string result;
     try{jsize bytes=env->GetArrayLength(input);if(bytes<20||bytes>65536||bytes%4)throw std::runtime_error("original texel shader bytes");std::vector<uint32_t> words(bytes/4);env->GetByteArrayRegion(input,0,bytes,reinterpret_cast<jbyte*>(words.data()));result=nullTexelsGate(words,validated,validation);if(validation.errors.load()||validation.warnings.load())throw std::runtime_error("texel validation errors/warnings");}
+    catch(const std::exception& e){result="{\"result\":\"FAIL\",\"error\":"+quote(e.what())+"}";}
+    result.insert(result.rfind('}'),validation.fields());const char* path=env->GetStringUTFChars(destination,nullptr);{std::ofstream f(path);f<<result;if(!f)result="REPORT_WRITE_FAILED";}env->ReleaseStringUTFChars(destination,path);return env->NewStringUTF(result.c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL Java_org_mavk_probe_CoreComparisonActivity_runSeparateSamplers(JNIEnv* env,jclass,jbyteArray input,jstring destination,jboolean validated){
+    ValidationCapture validation;std::string result;
+    try{jsize bytes=env->GetArrayLength(input);if(bytes<20||bytes>65536||bytes%4)throw std::runtime_error("original separate shader bytes");std::vector<uint32_t> words(bytes/4);env->GetByteArrayRegion(input,0,bytes,reinterpret_cast<jbyte*>(words.data()));result=separateSamplersGate(words,validated,validation);if(validation.errors.load()||validation.warnings.load())throw std::runtime_error("separate validation errors/warnings");}
     catch(const std::exception& e){result="{\"result\":\"FAIL\",\"error\":"+quote(e.what())+"}";}
     result.insert(result.rfind('}'),validation.fields());const char* path=env->GetStringUTFChars(destination,nullptr);{std::ofstream f(path);f<<result;if(!f)result="REPORT_WRITE_FAILED";}env->ReleaseStringUTFChars(destination,path);return env->NewStringUTF(result.c_str());
 }

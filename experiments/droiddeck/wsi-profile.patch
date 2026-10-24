@@ -1,0 +1,429 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 96065d9..4590ba6 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -421,6 +421,13 @@ add_custom_target(manifest_json ALL COMMAND
+    cp ${PROJECT_SOURCE_DIR}/layer/VkLayer_window_system_integration.json ${CMAKE_CURRENT_BINARY_DIR}
+    ${JSON_COMMANDS})
+ 
++# Install the layer and its manifest into a Vulkan implicit layer directory. Upstream leaves this to
++if(BUILD_WSI_X11 AND NOT BUILD_WSI_WAYLAND AND NOT BUILD_WSI_DISPLAY)
++   target_sources(${PROJECT_NAME} PRIVATE
++      wsi/extensions/external_memory_extension.cpp
++      wsi/image_backing_memory_external.cpp)
++endif()
++
+ # Install the layer and its manifest into a Vulkan implicit layer directory. Upstream leaves this to
+ # manual copying; the fork adds install rules so the Debian package picks up the .so and JSON.
+ install(TARGETS ${PROJECT_NAME} DESTINATION share/vulkan/implicit_layer.d/)
+diff --git a/wsi/external_memory.cpp b/wsi/external_memory.cpp
+index 4c454fd..7b8b22a 100644
+--- a/wsi/external_memory.cpp
++++ b/wsi/external_memory.cpp
+@@ -28,6 +28,8 @@
+ #include <cstdint>
+ #include <unistd.h>
+ #include <algorithm>
++#include <cstdlib>
++#include <cstdio>
+ 
+ #include "util/log.hpp"
+ #include "util/helpers.hpp"
+@@ -288,7 +290,11 @@ VkResult external_memory::find_host_visible_memory_type(const VkMemoryRequiremen
+          if ((mem_requirements.memoryTypeBits & (1u << i)) &&
+              (memory_props.memoryProperties.memoryTypes[i].propertyFlags & props) == props)
+          {
+-            *memory_type_index = i;
++              *memory_type_index = i;
++              const auto flags = memory_props.memoryProperties.memoryTypes[i].propertyFlags;
++              m_host_coherent = (flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) != 0;
++              if (std::getenv("MAVK_WSI_PROFILE"))
++                 std::fprintf(stderr, "MAVK_WSI_MEMORY type=%u flags=%u compatibleBits=%u coherent=%d\n", i, flags, mem_requirements.memoryTypeBits, m_host_coherent);
+             return VK_SUCCESS;
+          }
+       }
+@@ -344,13 +350,19 @@ VkResult external_memory::map_host_memory(void **mapped_ptr)
+    {
+       return VK_ERROR_MEMORY_MAP_FAILED;
+    }
+-   if (m_host_mapped_ptr != nullptr)
++   auto &device_data = layer::device_private_data::get(m_device);
++   VkResult result = VK_SUCCESS;
++   if (m_host_mapped_ptr == nullptr)
++      result = device_data.disp.MapMemory(m_device, m_host_memory, 0, VK_WHOLE_SIZE, 0, &m_host_mapped_ptr);
++   if (result == VK_SUCCESS && !m_host_coherent)
+    {
+-      *mapped_ptr = m_host_mapped_ptr;
+-      return VK_SUCCESS;
++      // The presentation payload supplies HOST_READ visibility before its fence.
++      VkMappedMemoryRange range{ VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, nullptr, m_host_memory, 0, VK_WHOLE_SIZE };
++      const auto invalidate = reinterpret_cast<PFN_vkInvalidateMappedMemoryRanges>(
++         device_data.disp.GetDeviceProcAddr(m_device, "vkInvalidateMappedMemoryRanges").value_or(nullptr));
++      if (invalidate == nullptr) return VK_ERROR_FEATURE_NOT_PRESENT;
++      result = invalidate(m_device, 1, &range);
+    }
+-   auto &device_data = layer::device_private_data::get(m_device);
+-   VkResult result = device_data.disp.MapMemory(m_device, m_host_memory, 0, VK_WHOLE_SIZE, 0, &m_host_mapped_ptr);
+    if (result == VK_SUCCESS)
+    {
+       *mapped_ptr = m_host_mapped_ptr;
+diff --git a/wsi/external_memory.hpp b/wsi/external_memory.hpp
+index 9b2e836..410be2a 100644
+--- a/wsi/external_memory.hpp
++++ b/wsi/external_memory.hpp
+@@ -277,6 +277,7 @@ private:
+    VkSubresourceLayout m_host_layout{};
+    VkMemoryPropertyFlags m_required_props{ 0 };
+    VkMemoryPropertyFlags m_optimal_props{ 0 };
++   bool m_host_coherent{ true };
+ 
+    const VkDevice &m_device;
+    util::allocator m_allocator;
+diff --git a/wsi/mavk_profile.hpp b/wsi/mavk_profile.hpp
+new file mode 100644
+index 0000000..d099b40
+--- /dev/null
++++ b/wsi/mavk_profile.hpp
+@@ -0,0 +1,40 @@
++#pragma once
++#include <chrono>
++#include <cstdio>
++#include <cstdlib>
++#include <cstring>
++#include <cstdint>
++
++namespace wsi {
++inline bool mavk_cached_readback() {
++   static const bool enabled = [] {
++      const char *p = std::getenv("MAVK_WSI_CACHED_READBACK");
++      const char *shm = std::getenv("WSI_X11_FORCE_SHM");
++      return p && std::strcmp(p, "1") == 0 && shm && std::strcmp(shm, "1") == 0;
++   }();
++   return enabled;
++}
++struct mavk_profile {
++   using clock = std::chrono::steady_clock;
++   bool enabled = [] { const char *p = std::getenv("MAVK_WSI_PROFILE"); return p && std::strcmp(p, "1") == 0; }();
++   clock::time_point since = clock::now();
++   uint64_t gpu = 0, sync = 0, map = 0, copy = 0, pacing = 0, queue = 0, frames = 0, bytes = 0;
++   clock::time_point now() const { return enabled ? clock::now() : clock::time_point{}; }
++   void add(uint64_t &sum, clock::time_point start) {
++      if (enabled) sum += static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(clock::now() - start).count());
++   }
++   void finish(uint64_t copied) {
++      if (!enabled) return;
++      frames++; bytes += copied;
++      const auto end = clock::now();
++      const auto seconds = std::chrono::duration<double>(end - since).count();
++      if (seconds < 1) return;
++      std::fprintf(stderr, "MAVK_WSI_PROFILE seconds=%.3f frames=%llu gpuWaitMs=%.3f xSyncMs=%.3f mapMs=%.3f copyMs=%.3f pacingMs=%.3f xQueueMs=%.3f copiedBytes=%llu uniqueFrames=unknown\n",
++         seconds, static_cast<unsigned long long>(frames), static_cast<double>(gpu) / 1e6,
++         static_cast<double>(sync) / 1e6, static_cast<double>(map) / 1e6, static_cast<double>(copy) / 1e6,
++         static_cast<double>(pacing) / 1e6, static_cast<double>(queue) / 1e6, static_cast<unsigned long long>(bytes));
++      since = end; gpu = sync = map = copy = pacing = queue = frames = bytes = 0;
++   }
++};
++inline mavk_profile &mavk_wsi_profile() { static thread_local mavk_profile p; return p; }
++}
+diff --git a/wsi/swapchain_image.cpp b/wsi/swapchain_image.cpp
+index aff1028..6721cce 100644
+--- a/wsi/swapchain_image.cpp
++++ b/wsi/swapchain_image.cpp
+@@ -29,6 +29,7 @@
+  */
+ 
+ #include "swapchain_image.hpp"
++#include "mavk_profile.hpp"
+ 
+ namespace wsi
+ {
+@@ -145,14 +146,19 @@ VkResult swapchain_image::set_present_payload(VkQueue queue, const queue_submit_
+    {
+       return sync_queue_submit(*m_device_data, queue, VK_NULL_HANDLE, semaphores, submission_pnext);
+    }
+-   return m_present_fence->set_payload(queue, semaphores, submission_pnext);
++   return m_present_fence->set_payload(queue, semaphores, submission_pnext,
++                                      m_wait_on_present_fence && mavk_cached_readback());
+ }
+ 
+ VkResult swapchain_image::wait_present(uint64_t timeout_ns)
+ {
+    if (m_wait_on_present_fence && m_present_fence)
+    {
+-      return m_present_fence->wait_payload(timeout_ns);
++      auto &profile = mavk_wsi_profile();
++      const auto start = profile.now();
++      const auto result = m_present_fence->wait_payload(timeout_ns);
++      profile.add(profile.gpu, start);
++      return result;
+    }
+ 
+    return VK_SUCCESS;
+diff --git a/wsi/synchronization.cpp b/wsi/synchronization.cpp
+index 513471a..53afe80 100644
+--- a/wsi/synchronization.cpp
++++ b/wsi/synchronization.cpp
+@@ -84,6 +84,8 @@ fence_sync &fence_sync::operator=(fence_sync &&rhs)
+    std::swap(has_payload, rhs.has_payload);
+    std::swap(payload_finished, rhs.payload_finished);
+    std::swap(dev, rhs.dev);
++   std::swap(host_pool, rhs.host_pool);
++   std::swap(host_command, rhs.host_command);
+    return *this;
+ }
+ 
+@@ -92,6 +94,8 @@ fence_sync::~fence_sync()
+    if (fence != VK_NULL_HANDLE)
+    {
+       wait_payload(UINT64_MAX);
++      if (host_pool != VK_NULL_HANDLE)
++         dev->disp.DestroyCommandPool(dev->device, host_pool, dev->get_allocator().get_original_callbacks());
+       dev->disp.DestroyFence(dev->device, fence, dev->get_allocator().get_original_callbacks());
+    }
+ }
+@@ -110,8 +114,48 @@ VkResult fence_sync::wait_payload(uint64_t timeout)
+    return res;
+ }
+ 
+-VkResult fence_sync::set_payload(VkQueue queue, const queue_submit_semaphores &semaphores, const void *submission_pnext)
++VkResult fence_sync::prepare_host_readback()
+ {
++   if (host_command != VK_NULL_HANDLE) return VK_SUCCESS;
++   const auto families = dev->instance_data.get_queue_family_properties(dev->physical_device);
++   // This isolated PoC must not guess the family of an arbitrary presenting queue.
++   if (families.size() != 1 || !(families[0].queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT))
++      return VK_ERROR_FEATURE_NOT_PRESENT;
++   const auto pipeline_barrier = reinterpret_cast<PFN_vkCmdPipelineBarrier>(
++      dev->disp.GetDeviceProcAddr(dev->device, "vkCmdPipelineBarrier").value_or(nullptr));
++   if (pipeline_barrier == nullptr) return VK_ERROR_FEATURE_NOT_PRESENT;
++   VkCommandPool pool = VK_NULL_HANDLE;
++   VkCommandBuffer command = VK_NULL_HANDLE;
++   const auto allocator = dev->get_allocator().get_original_callbacks();
++   VkCommandPoolCreateInfo pool_info{ VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO, nullptr, 0, 0 };
++   VkResult result = dev->disp.CreateCommandPool(dev->device, &pool_info, allocator, &pool);
++   if (result != VK_SUCCESS) return result;
++   VkCommandBufferAllocateInfo allocation{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO, nullptr, pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1 };
++   result = dev->disp.AllocateCommandBuffers(dev->device, &allocation, &command);
++   if (result == VK_SUCCESS)
++   {
++      VkCommandBufferBeginInfo begin{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, nullptr, 0, nullptr };
++      result = dev->disp.BeginCommandBuffer(command, &begin);
++      if (result == VK_SUCCESS)
++      {
++         VkMemoryBarrier barrier{ VK_STRUCTURE_TYPE_MEMORY_BARRIER, nullptr, VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_HOST_READ_BIT };
++         pipeline_barrier(command, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_HOST_BIT,
++                          0, 1, &barrier, 0, nullptr, 0, nullptr);
++         result = dev->disp.EndCommandBuffer(command);
++      }
++   }
++   if (result != VK_SUCCESS) { dev->disp.DestroyCommandPool(dev->device, pool, allocator); return result; }
++   host_pool = pool; host_command = command;
++   return VK_SUCCESS;
++}
++
++VkResult fence_sync::set_payload(VkQueue queue, const queue_submit_semaphores &semaphores,
++                                const void *submission_pnext, bool host_readback)
++{
++   if (host_readback) {
++      if (submission_pnext != nullptr) return VK_ERROR_FEATURE_NOT_PRESENT;
++      TRY(prepare_host_readback());
++   }
+    VkResult result = dev->disp.ResetFences(dev->device, 1u, &fence);
+    if (result != VK_SUCCESS)
+    {
+@@ -120,7 +164,7 @@ VkResult fence_sync::set_payload(VkQueue queue, const queue_submit_semaphores &s
+    }
+    has_payload = false;
+ 
+-   result = sync_queue_submit(*dev, queue, fence, semaphores, submission_pnext);
++   result = sync_queue_submit(*dev, queue, fence, semaphores, submission_pnext, host_readback ? host_command : VK_NULL_HANDLE);
+    if (result == VK_SUCCESS)
+    {
+       has_payload = true;
+@@ -205,13 +249,13 @@ std::optional<util::fd_owner> sync_fd_fence_sync::export_sync_fd()
+ }
+ 
+ VkResult sync_queue_submit(const layer::device_private_data &device, VkQueue queue, VkFence fence,
+-                           const queue_submit_semaphores &semaphores, const void *submission_pnext)
++                           const queue_submit_semaphores &semaphores, const void *submission_pnext, VkCommandBuffer host_command)
+ {
+    /* When the semaphore that comes in is signalled, we know that all work is done. So, we do not
+     * want to block any future Vulkan queue work on it. So, we pass in BOTTOM_OF_PIPE bit as the
+     * wait flag.
+     */
+-   VkPipelineStageFlags pipeline_stage_flag = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
++   VkPipelineStageFlags pipeline_stage_flag = host_command != VK_NULL_HANDLE ? VK_PIPELINE_STAGE_ALL_COMMANDS_BIT : VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    VkPipelineStageFlags *pipeline_stage_flag_data = &pipeline_stage_flag;
+ 
+    util::vector<VkPipelineStageFlags> pipeline_stage_flags_vector{ util::allocator(
+@@ -224,7 +268,7 @@ VkResult sync_queue_submit(const layer::device_private_data &device, VkQueue que
+          return VK_ERROR_OUT_OF_HOST_MEMORY;
+       }
+       std::fill(pipeline_stage_flags_vector.begin(), pipeline_stage_flags_vector.end(),
+-                VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
++                pipeline_stage_flag);
+       pipeline_stage_flag_data = pipeline_stage_flags_vector.data();
+    }
+ 
+@@ -233,8 +277,8 @@ VkResult sync_queue_submit(const layer::device_private_data &device, VkQueue que
+                                 semaphores.wait_semaphores_count,
+                                 semaphores.wait_semaphores,
+                                 pipeline_stage_flag_data,
+-                                0,
+-                                nullptr,
++                                host_command != VK_NULL_HANDLE ? 1u : 0u,
++                                host_command != VK_NULL_HANDLE ? &host_command : nullptr,
+                                 semaphores.signal_semaphores_count,
+                                 semaphores.signal_semaphores };
+ 
+diff --git a/wsi/synchronization.hpp b/wsi/synchronization.hpp
+index ca2c7ac..83a25e6 100644
+--- a/wsi/synchronization.hpp
++++ b/wsi/synchronization.hpp
+@@ -112,7 +112,7 @@ public:
+     * @return VK_SUCCESS on success or other error code on failing to set the payload.
+     */
+    VkResult set_payload(VkQueue queue, const queue_submit_semaphores &semaphores,
+-                        const void *submission_pnext = nullptr);
++                        const void *submission_pnext = nullptr, bool host_readback = false);
+ 
+ protected:
+    /**
+@@ -143,6 +143,9 @@ protected:
+    }
+ 
+ private:
++   VkResult prepare_host_readback();
++   VkCommandPool host_pool{ VK_NULL_HANDLE };
++   VkCommandBuffer host_command{ VK_NULL_HANDLE };
+    VkFence fence{ VK_NULL_HANDLE };
+    bool has_payload{ false };
+    bool payload_finished{ false };
+@@ -208,7 +211,8 @@ private:
+  * @return VK_SUCCESS on success, an appropiate error code otherwise.
+  */
+ VkResult sync_queue_submit(const layer::device_private_data &device, VkQueue queue, VkFence fence,
+-                           const queue_submit_semaphores &semaphores, const void *submission_pnext = nullptr);
++                           const queue_submit_semaphores &semaphores, const void *submission_pnext = nullptr,
++                           VkCommandBuffer host_command = VK_NULL_HANDLE);
+ 
+ /**
+  * @brief Submit queue operation for synchronization.
+diff --git a/wsi/x11/shm_presenter.cpp b/wsi/x11/shm_presenter.cpp
+index b460f60..ee02e73 100644
+--- a/wsi/x11/shm_presenter.cpp
++++ b/wsi/x11/shm_presenter.cpp
+@@ -32,6 +32,7 @@
+ #include "surface.hpp"
+ #include "swapchain.hpp"
+ #include "util/log.hpp"
++#include "wsi/mavk_profile.hpp"
+ 
+ #include <sys/shm.h>
+ #include <sys/ipc.h>
+@@ -742,6 +743,8 @@ VkResult shm_presenter::create_image_resources(swapchain_image &, x11_image_data
+ 
+ VkResult shm_presenter::present_image(x11_image_data *image_data, uint32_t /*serial*/, uint64_t /*target_msc*/)
+ {
++   auto &profile = mavk_wsi_profile();
++   const auto sync_start = profile.now();
+ 
+    if (m_fence_available && !m_first_frame)
+    {
+@@ -763,6 +766,7 @@ VkResult shm_presenter::present_image(x11_image_data *image_data, uint32_t /*ser
+    }
+ 
+    image_data->use_alt_buffer = !image_data->use_alt_buffer;
++   profile.add(profile.sync, sync_start);
+    xcb_shm_seg_t active_seg =
+       image_data->use_alt_buffer && image_data->shm_seg_alt != XCB_NONE ? image_data->shm_seg_alt : image_data->shm_seg;
+    void *active_addr = image_data->use_alt_buffer && image_data->shm_addr_alt != nullptr ? image_data->shm_addr_alt :
+@@ -773,8 +777,12 @@ VkResult shm_presenter::present_image(x11_image_data *image_data, uint32_t /*ser
+       if (image_data->external_mem.is_host_visible())
+       {
+          void *mapped_memory = nullptr;
+-         if (image_data->external_mem.map_host_memory(&mapped_memory) == VK_SUCCESS && mapped_memory != nullptr)
++         const auto map_start = profile.now();
++         const auto map_result = image_data->external_mem.map_host_memory(&mapped_memory);
++         profile.add(profile.map, map_start);
++         if (map_result == VK_SUCCESS && mapped_memory != nullptr)
+          {
++            const auto copy_start = profile.now();
+             const auto &vulkan_layout = image_data->external_mem.get_host_layout();
+             size_t source_stride = vulkan_layout.rowPitch;
+             size_t dest_stride = image_data->stride;
+@@ -817,6 +825,7 @@ VkResult shm_presenter::present_image(x11_image_data *image_data, uint32_t /*ser
+                   std::memcpy(dst_row, src_row, copy_size);
+                }
+             }
++            profile.add(profile.copy, copy_start);
+          }
+          else
+          {
+@@ -836,6 +845,7 @@ VkResult shm_presenter::present_image(x11_image_data *image_data, uint32_t /*ser
+ 
+    /* Checked, with the reply discarded: if the application has already destroyed the window, the error is
+     * dropped instead of reaching its event queue, where Xlib's default error handler would exit. */
++   const auto queue_start = profile.now();
+    xcb_discard_reply(
+       m_connection,
+       xcb_shm_put_image_checked(m_connection, m_window, m_gc, static_cast<uint16_t>(image_data->width),
+@@ -844,6 +854,8 @@ VkResult shm_presenter::present_image(x11_image_data *image_data, uint32_t /*ser
+                                 0, static_cast<uint8_t>(image_data->depth), XCB_IMAGE_FORMAT_Z_PIXMAP, 0, active_seg, 0)
+          .sequence);
+ 
++   profile.add(profile.queue, queue_start);
++   const auto pacing_start = profile.now();
+    auto current_time = std::chrono::steady_clock::now();
+    auto time_since_last = std::chrono::duration_cast<std::chrono::microseconds>(current_time - m_last_frame_time);
+ 
+@@ -865,6 +877,8 @@ VkResult shm_presenter::present_image(x11_image_data *image_data, uint32_t /*ser
+       current_time = std::chrono::steady_clock::now();
+    }
+    m_last_frame_time = current_time;
++   profile.add(profile.pacing, pacing_start);
++   const auto final_queue_start = profile.now();
+ 
+    if (m_fence_available)
+    {
+@@ -876,6 +890,8 @@ VkResult shm_presenter::present_image(x11_image_data *image_data, uint32_t /*ser
+    }
+ 
+    int final_flush_result = xcb_flush(m_connection);
++   profile.add(profile.queue, final_queue_start);
++   profile.finish(image_data->shm_size);
+    if (final_flush_result <= 0)
+    {
+       WSI_LOG_ERROR("SHM presenter xcb_flush failed: result=%d", final_flush_result);
+@@ -909,4 +925,4 @@ VkResult shm_presenter::create_graphics_context()
+ }
+ 
+ } /* namespace x11 */
+-} /* namespace wsi */
+\ No newline at end of file
++} /* namespace wsi */
+diff --git a/wsi/x11/swapchain.cpp b/wsi/x11/swapchain.cpp
+index a857035..1dff370 100644
+--- a/wsi/x11/swapchain.cpp
++++ b/wsi/x11/swapchain.cpp
+@@ -59,6 +59,7 @@
+ #include "wsi/extensions/external_memory_extension.hpp"
+ #include "wsi/extensions/image_compression_control.hpp"
+ #include "shm_presenter.hpp"
++#include "wsi/mavk_profile.hpp"
+ #include "dri3_presenter.hpp"
+ #include "present_wait_x11.hpp"
+ #include "util/drm/drm_utils.hpp"
+@@ -522,9 +523,9 @@ VkResult swapchain::allocate_and_bind_swapchain_image(swapchain_image &image)
+    else
+    {
+       /* SHM: allocate host-visible memory, bind it to the (linear) image, set up the SHM segments. */
+-      const VkMemoryPropertyFlags optimal = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT |
+-                                            VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+-      const VkMemoryPropertyFlags required = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
++      const VkMemoryPropertyFlags coherent = mavk_cached_readback() ? 0u : static_cast<VkMemoryPropertyFlags>(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
++      const VkMemoryPropertyFlags optimal = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | coherent | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
++      const VkMemoryPropertyFlags required = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | coherent;
+       TRY_LOG_CALL(image_data->external_mem.configure_for_host_visible(image_create_info, required, optimal));
+       TRY_LOG_CALL(image_data->external_mem.allocate_and_bind_image(image.get_image(), image_create_info));
+       TRY_LOG(m_presenter->create_image_resources(image, image_data, width, height, depth),

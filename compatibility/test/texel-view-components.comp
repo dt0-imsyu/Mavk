@@ -1,0 +1,17 @@
+#version 450
+layout(local_size_x=8) in;
+#ifdef FLOAT_TEXELS
+layout(set=0,binding=0) uniform samplerBuffer source;
+#else
+layout(set=0,binding=0) uniform usamplerBuffer source;
+#endif
+layout(set=0,binding=1,std430) buffer Results {uvec4 value[8];} result;
+void main(){
+    uint i=gl_GlobalInvocationID.x;
+    int indices[8]=int[8](0,1,3,-1,4,0,1073741824,2);
+#ifdef FLOAT_TEXELS
+    result.value[i]=floatBitsToUint(texelFetch(source,indices[i]));
+#else
+    result.value[i]=texelFetch(source,indices[i]);
+#endif
+}

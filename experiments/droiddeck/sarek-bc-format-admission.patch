@@ -1,0 +1,58 @@
+diff --git a/src/dxvk/dxvk_device_info.cpp b/src/dxvk/dxvk_device_info.cpp
+--- a/src/dxvk/dxvk_device_info.cpp
++++ b/src/dxvk/dxvk_device_info.cpp
+@@ -7,9 +7,16 @@
+ #include "dxvk_device_info.h"
+ #include "dxvk_instance.h"
+ #include "dxvk_limits.h"
++#include "../util/util_env.h"
+ 
+ namespace dxvk {
+ 
++  // Experimental D3D-only format admission. Never enables the aggregate BC bit.
++  static bool mavkD3dBcFormats() {
++    static const bool enabled = env::getEnvVar("MAVK_SAREK_BC_FORMATS") == "1";
++    return enabled;
++  }
++
+   #define CORE_VERSIONS                            \
+     HANDLE_CORE(vk11);                             \
+     HANDLE_CORE(vk12);                             \
+@@ -115,6 +122,28 @@ namespace dxvk {
+     initQueueProperties(instance, adapter, deviceInfo);
+     initMemoryProperties(instance, adapter);
+ 
++    if (mavkD3dBcFormats()) {
++      constexpr VkFormat formats[] = {
++        VK_FORMAT_BC1_RGBA_UNORM_BLOCK, VK_FORMAT_BC1_RGBA_SRGB_BLOCK,
++        VK_FORMAT_BC2_UNORM_BLOCK, VK_FORMAT_BC2_SRGB_BLOCK,
++        VK_FORMAT_BC3_UNORM_BLOCK, VK_FORMAT_BC3_SRGB_BLOCK,
++        VK_FORMAT_BC4_UNORM_BLOCK, VK_FORMAT_BC4_SNORM_BLOCK,
++        VK_FORMAT_BC5_UNORM_BLOCK, VK_FORMAT_BC5_SNORM_BLOCK,
++        VK_FORMAT_BC6H_UFLOAT_BLOCK, VK_FORMAT_BC6H_SFLOAT_BLOCK,
++        VK_FORMAT_BC7_UNORM_BLOCK, VK_FORMAT_BC7_SRGB_BLOCK,
++      };
++      constexpr VkFormatFeatureFlags required = VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT
++        | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT
++        | VK_FORMAT_FEATURE_TRANSFER_SRC_BIT | VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
++      for (VkFormat format : formats) {
++        VkFormatProperties properties = {};
++        vk->vkGetPhysicalDeviceFormatProperties(adapter, format, &properties);
++        if ((properties.optimalTilingFeatures & required) != required)
++          throw DxvkError(str::format("Mavk D3D BC admission failed: format ", uint32_t(format)));
++      }
++      Logger::info("Mavk D3D BC admission: 14 formats PASS; aggregate feature unchanged");
++    }
++
+     disableUnusedFeatures(instance, safeMode);
+ 
+     enableFeaturesAndExtensions();
+@@ -864,7 +893,7 @@ namespace dxvk {
+       ENABLE_FEATURE(core.features, shaderResourceResidency, false),
+       ENABLE_FEATURE(core.features, shaderResourceMinLod, false),
+       ENABLE_FEATURE(core.features, tessellationShader, false),
+-      ENABLE_FEATURE(core.features, textureCompressionBC, true),
++      ENABLE_FEATURE(core.features, textureCompressionBC, !mavkD3dBcFormats()),
+       ENABLE_FEATURE(core.features, variableMultisampleRate, false),
+       ENABLE_FEATURE(core.features, vertexPipelineStoresAndAtomics, false),
+       ENABLE_FEATURE(core.features, wideLines, false),

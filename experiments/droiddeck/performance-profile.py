@@ -1,0 +1,82 @@
+"""Temporarily enable Muck-only CPU attribution and optional private GPU probes."""
+import argparse
+import json
+import os
+from pathlib import Path
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('action', choices=('enable', 'restore'))
+parser.add_argument('--gpu-layer', type=Path)
+parser.add_argument('--gpu-warmup-ms', type=int, default=30000)
+parser.add_argument('--shader-layer', type=Path)
+parser.add_argument('--metadata-read-only', action='store_true')
+parser.add_argument('--shader-cache-entries', type=int, default=4, choices=(4,64))
+args = parser.parse_args()
+assert 0 <= args.gpu_warmup_ms <= 60000
+root = Path('/data/user/0/com.droiddeck.launcher.mavk/files')
+backup = root / 'mavk-perf/profile-backup.json'
+sources = (Path('/root/.config/droiddeck/game-environment.json'), root / 'game-environment.json')
+expected = {'MAVK_LAYER_PROFILE': '1'}
+assert not (args.gpu_layer and args.shader_layer)
+if args.shader_layer:
+    assert args.action == 'enable'
+    layer = args.shader_layer
+    assert layer.parent == root and layer.name.startswith('mavk-')
+    assert (layer / 'libVkLayer_mavk_compat.so').is_file()
+    assert (layer / 'VkLayer_mavk_compat.json').is_file()
+    baseline = Path(os.environ['DROIDDECK_MAVK_RUNTIME']) / 'payload'
+    assert (baseline / 'VkLayer_hybris_compat.json').is_file()
+    expected.update(DROIDDECK_MAVK_LAYER_PATH=str(layer) + ':' + str(baseline),
+                    MAVK_GPU_PROBE='0', MAVK_SHADER_CACHE_PROFILE='1',
+                    MAVK_METADATA_READ_ONLY='1' if args.metadata_read_only else '0',
+                    MAVK_SHADER_CACHE_ENTRIES=str(args.shader_cache_entries))
+if args.gpu_layer:
+    assert args.action == 'enable'
+    layer = args.gpu_layer
+    assert layer.parent == root and layer.name.startswith('mavk-')
+    assert (layer / 'libVkLayer_mavk_compat.so').is_file()
+    assert (layer / 'VkLayer_mavk_compat.json').is_file()
+    baseline = Path(os.environ['DROIDDECK_MAVK_RUNTIME']) / 'payload'
+    assert (baseline / 'VkLayer_hybris_compat.json').is_file()
+    expected.update(MAVK_GPU_PROBE='1', MAVK_GPU_PROBE_WARMUP_MS=str(args.gpu_warmup_ms),
+                    DROIDDECK_MAVK_LAYER_PATH=str(layer) + ':' + str(baseline))
+if args.action == 'enable':
+    assert not backup.exists() or not json.loads(backup.read_text())['active'], 'Restore active profile first'
+    saved = {'active': True, 'values': {}, 'expected': expected}
+    changes = []
+    for source in sources:
+        body = json.loads(source.read_text())
+        assert body['version'] == 1
+        game = body.setdefault('games', {}).setdefault('1625450', {})
+        saved['values'][str(source)] = {key: {'present': key in game, 'value': game.get(key)} for key in expected}
+        game.update(expected)
+        changes.append((source, body))
+    backup.write_text(json.dumps(saved, indent=2) + '\n')
+else:
+    saved = json.loads(backup.read_text())
+    assert saved['active'], 'No active diagnostic profile'
+    if 'expected' not in saved:
+        saved['expected'] = {'MAVK_LAYER_PROFILE': '1'}
+        saved['values'] = {source: {'MAVK_LAYER_PROFILE': value} for source, value in saved['values'].items()}
+    expected = saved['expected']
+    changes = []
+    for source in sources:
+        body = json.loads(source.read_text())
+        assert body['version'] == 1
+        game = body.get('games', {}).get('1625450', {})
+        for key, value in expected.items():
+            assert game.get(key) == value, 'Preserve a concurrently edited profile'
+            previous = saved['values'][str(source)][key]
+            if previous['present']:
+                game[key] = previous['value']
+            else:
+                game.pop(key, None)
+        changes.append((source, body))
+for source, body in changes:
+    staged = source.with_suffix('.json.staged')
+    staged.write_text(json.dumps(body, indent=2) + '\n')
+    staged.replace(source)
+if args.action == 'restore':
+    saved['active'] = False
+    backup.write_text(json.dumps(saved, indent=2) + '\n')
+print(f'Muck-only profile {args.action}; diagnostic environment only; installed binaries, feature bits and guards unchanged')

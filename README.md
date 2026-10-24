@@ -1,6 +1,7 @@
 # Mavk
 
-Developer prototype checkpoint: [DroidDeck/AHB results and remaining gates](docs/DEMO_PREPARATION_2026-10-25.md).
+Latest: [source-built DroidDeck APK and Muck pacing evidence](docs/SOURCE_APK_AND_MUCK_PACING_2026-10-25.md).
+Developer prototype: [AHB/input results and remaining gates](docs/DEMO_PREPARATION_2026-10-25.md).
 
 Рабочее название независимого Vulkan runtime/backend для stock Android,
 первый целевой GPU — Mali-G925 на Galaxy Tab S11. Название пока не проверено

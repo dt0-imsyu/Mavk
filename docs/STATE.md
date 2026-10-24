@@ -1,5 +1,14 @@
 # Mavk checkpoint — 2026-10-23
 
+## LATEST — source-built APK / Muck saved pacing, 2026-10-25
+
+SOURCE_APK_AND_MUCK_PACING_2026-10-25.md: actual Gradle APK675e9cb6 installed,
+runtime-input APK attestation PASS; AMD64 Wine AHB1920→1280→1920 resize passes,
+CoreZero/gaps0. Seed70inputs100MB were double-pinned; not a full dependency/Rust
+rebuild. Read-only Muck IL and saved XML now prove144FPS setting/VSync0 and its
+assignment path, not an explicit saved30cap. Does not localize live~30FPS root
+cause. Steam reserved; no game launch. Local commits only, no production changes.
+
 ## LATEST — developer demo preparation, 2026-10-25
 
 DEMO_PREPARATION_2026-10-25.md is authoritative. C: fork DroidDeck-Mavk/mavk-demo;

@@ -1,5 +1,12 @@
 # Active development order — 2026-10-17
 
+LATEST SOURCE_APK_AND_MUCK_PACING_2026-10-25.md: source-built Gradle APK675e9cb6
+installed; full declared runtime APK verification + AMD64 Wine AHB/ResizeBuffers
+PASS CoreZero/gaps0. External prebuilt dependencies pinned, optional Rust skipped
+as in baseline (not full-source dependency/release claim). Static real Muck IL +
+saved XML confirms fpsLimit144,vSync0, no saved30FPS cap. Runtime FPS attribution
+still requires Steam-free live gameplay; user reservation remains in force.
+
 LATEST DEMO_PREPARATION_2026-10-25.md: separate C: DroidDeck-Mavk/mavk-demo fork,
 portable vendored WSI source/provenance, packaged runtime33c0 and installed APK
 360c4765. Scaled pointer adapter + compositor visible-AHB input routing confirmed

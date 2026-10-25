@@ -1,5 +1,22 @@
 # Mavk checkpoint — 2026-10-23
 
+## LATEST — uniform metadata / native public sets, 2026-10-25
+
+Resumed GLM's UBO work; corrected packed std140 metadata passes Mali GPU oracles
+but same creative scene12.1 vs control12.2 buffers/s: no gain. Do NOT repeat this
+as a promising60FPS path. New optional native-public-set passthrough mirrors
+validated ordinary/template writes at the app update point, seals them after
+recording, preserves typed-null/copy/extended-update fallback.14 actual GPU runs
+PASS (including retention/replay/dynamic/inflight/immutable/images), CoreZero;
+ARM64 template callback test19checks/19negatives PASS. Layer68586264ff98...
+actually bypasses public duplication for~99% of Muck draws. Menu35.2/s, same
+forward creative scene13.0/s; control12.2/s had different thermals, so no proven
+FPS gain.60FPS still NOT reached; diagonal artifact cause still OPEN.
+Private profile restored/inactive and Muck quit, Steam retained. Installed APK
+6c8680f5/runtime3bd128 unchanged. See UNIFORM_METADATA_AND_NATIVE_SETS_2026-10-25.md
+for exact hashes/evidence/failures. Stop descriptor microtuning; isolate dominant
+GPU shader/driver versus engine cost next. GPU probe/CSE remain OFF.
+
 ## LATEST — portable FEX boundary / APK checkpoint, 2026-10-25
 
 Installed source APK6c8680f5 (fex-boundary-demo), runtime3bd128 unchanged. Steam

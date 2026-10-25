@@ -261,7 +261,10 @@ public:
     // Bounded counterpart of vkUpdateDescriptorSetWithTemplate. Source may be
     // unaligned/interleaved; memcpy avoids typed alias/alignment assumptions.
     // Expand first,then reuse the existing whole-call transactional update path.
-    void updateWithTemplate(VkDescriptorSet set,const UpdateTemplate& descriptorTemplate,const void* data,size_t dataBytes){
+    // Optional observer runs only after successful validation/commit. Decoded
+    // pointers are borrowed for this call and must not be retained by it.
+    void updateWithTemplate(VkDescriptorSet set,const UpdateTemplate& descriptorTemplate,const void* data,size_t dataBytes,
+                            const std::function<void(uint32_t,const VkWriteDescriptorSet*)>& afterUpdate={}){
         const auto& bindings=find(set).bindings;
         if(descriptorTemplate.entries_.empty()||bindings.size()!=descriptorTemplate.bindings_.size())throw std::invalid_argument("template/layout mismatch");
         auto a=bindings.begin(),b=descriptorTemplate.bindings_.begin();
@@ -281,6 +284,7 @@ public:
             else{images[n].resize(e.descriptorCount);for(uint32_t i=0;i<e.descriptorCount;i++)std::memcpy(&images[n][i],source+e.offset+e.stride*i,sizeof(VkDescriptorImageInfo));w.pImageInfo=images[n].data();}
         }
         update(uint32_t(writes.size()),writes.data(),0,nullptr);
+        if(afterUpdate)afterUpdate(uint32_t(writes.size()),writes.data());
     }
     // Writes in array order,then copies in array order. Whole call is staged;
     // rejection cannot leave some logical sets partially updated.

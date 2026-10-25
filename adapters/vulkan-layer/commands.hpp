@@ -119,6 +119,7 @@ void reportProfileLocked(Device& s){
     std::fprintf(stderr,"MAVK_DESCRIPTOR_PROFILE seconds=%.3f snapshotWallMs=%.3f materializeWallMs=%.3f materializations=%llu metadataBytes=%llu nativeBinds=%llu diagnosticAllocations=%llu metadataArenaAllocations=%llu\n",seconds,s.profileSnapshotNs/1e6,s.profileMaterializeNs/1e6,(unsigned long long)s.profileMaterializations,(unsigned long long)s.profileMetadataBytes,(unsigned long long)s.profileNativeBinds,(unsigned long long)s.profileDiagnosticAllocations,(unsigned long long)s.profileArenaAllocations);
     s.profileSnapshotNs=s.profileMaterializeNs=s.profileMaterializations=s.profileMetadataBytes=s.profileNativeBinds=0;
     s.profileDiagnosticAllocations=s.profileArenaAllocations=0;
+    std::fprintf(stderr,"MAVK_NATIVE_PUBLIC_PROFILE draws=%llu\n",(unsigned long long)s.profileNativePublic);s.profileNativePublic=0;
     s.profileSince=now;
     s.profileGuardNs=s.profileWaitNs=s.profilePresentNs=s.profileGuardCalls=s.profileWaitCalls=s.profilePresents=0;
     s.profileSemaphoreNs=s.profileSemaphoreCalls=s.profileSubmitNs=s.profileSubmitCalls=0;
@@ -178,17 +179,23 @@ bool prepareExecution(Device& s,VkCommandBuffer h,VkPipelineBindPoint point){
         const auto priorUploads=s.profile?bound.pipeline->descriptors->counters().metadataUploads:0;
         const auto priorDiagnostics=s.profile?bound.pipeline->descriptors->counters().diagnosticAllocations:0;
         const auto priorArena=s.profile&&s.metadataArena?s.metadataArena->allocations():0;
-        auto generation=bound.pipeline->descriptors->materialize(cpu,resolve);
+        bool nativePublic=s.useNativePublic;
+        if(nativePublic)for(const auto& row:cpu->values)for(const auto& value:row)if(value.status!=DescriptorStatus::Bound)nativePublic=false;
+        if(nativePublic)for(uint32_t i=0;i<bound.pipeline->schema->sets.size();i++)if(bound.pipeline->requiredSets[i]&&!bound.pipeline->schema->sets[i].trackable&&!bound.pipeline->schema->sets[i].nativeSampler)nativePublic=false;
+        if(nativePublic)for(uint32_t i=0;i<bound.pipeline->schema->sets.size();i++)if(bound.pipeline->requiredSets[i]&&!bound.pipeline->schema->sets[i].nativeSampler){auto at=s.sets.find(bound.sets[i].set);if(at==s.sets.end()||!at->second.nativeReady)nativePublic=false;}
+        auto generation=bound.pipeline->descriptors->materialize(cpu,resolve,nativePublic);
+        if(nativePublic)for(uint32_t i=0;i<bound.pipeline->schema->sets.size();i++)if(bound.pipeline->requiredSets[i]&&!bound.pipeline->schema->sets[i].nativeSampler)s.sets.at(bound.sets[i].set).nativeSealed=true;
+        if(s.profile&&nativePublic)s.profileNativePublic++;
         if(s.profile){
             s.profileMaterializeNs+=uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-materializeStart).count());
             const auto uploads=bound.pipeline->descriptors->counters().metadataUploads-priorUploads;
-            s.profileMaterializations+=uploads;s.profileMetadataBytes+=uploads*cpu->metadata.size()*sizeof(uint32_t);
+            s.profileMaterializations+=uploads;s.profileMetadataBytes+=uploads*(bound.pipeline->schema->uniformMetadata?((cpu->metadata.size()+3)/4)*16:cpu->metadata.size()*sizeof(uint32_t));
             s.profileDiagnosticAllocations+=bound.pipeline->descriptors->counters().diagnosticAllocations-priorDiagnostics;
             if(s.metadataArena)s.profileArenaAllocations+=s.metadataArena->allocations()-priorArena;
         }
         generation->validateDynamicOffsets(dynamicOffsets);
         if(std::find(c.generations.begin(),c.generations.end(),generation)==c.generations.end())c.generations.push_back(generation);
-        auto sets=generation->sets();for(uint32_t i=0;i<bound.pipeline->schema->sets.size();i++)if(bound.pipeline->requiredSets[i]&&bound.pipeline->schema->sets[i].nativeSampler){if(sets[i])throw std::invalid_argument("native sampler heap unexpectedly snapshotted");sets[i]=bound.sets[i].set;}
+        auto sets=generation->sets();for(uint32_t i=0;i<bound.pipeline->schema->sets.size();i++)if(bound.pipeline->requiredSets[i]&&(nativePublic||bound.pipeline->schema->sets[i].nativeSampler)){if(sets[i])throw std::invalid_argument("native public set unexpectedly snapshotted");sets[i]=bound.sets[i].set;}
         // Leave unused slots unbound; preserve their original indices and omit
         // only their dynamic offsets. The private guard set remains last.
         for(uint32_t first=0;first<sets.size();){

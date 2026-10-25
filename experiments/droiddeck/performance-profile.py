@@ -11,6 +11,8 @@ parser.add_argument('--gpu-current', action='store_true', help='Profile the veri
 parser.add_argument('--guard-cse', action='store_true', help='Enable the existing checked metadata-read optimizer, retaining guards')
 parser.add_argument('--shared-diagnostics', action='store_true', help='Reuse zero diagnostic storage only when shader reports are disabled')
 parser.add_argument('--descriptor-arena', action='store_true', help='Suballocate immutable metadata with command-generation lifetime')
+parser.add_argument('--uniform-metadata', action='store_true', help='Use the private checked std140 metadata candidate')
+parser.add_argument('--native-bound-sets', action='store_true', help='Borrow ordinary native public sets only for fully bound resources')
 parser.add_argument('--gpu-warmup-ms', type=int, default=30000)
 parser.add_argument('--shader-layer', type=Path)
 parser.add_argument('--metadata-read-only', action='store_true')
@@ -27,6 +29,12 @@ if args.shared_diagnostics:
 if args.descriptor_arena:
     assert args.action == 'enable' and args.shader_layer
     expected['MAVK_DESCRIPTOR_ARENA'] = '1'
+if args.uniform_metadata:
+    assert args.action == 'enable' and args.shader_layer
+    expected['MAVK_UNIFORM_GUARD_METADATA'] = '1'
+if args.native_bound_sets:
+    assert args.action == 'enable' and args.shader_layer
+    expected['MAVK_NATIVE_BOUND_SETS'] = '1'
 if args.guard_cse:
     assert args.action == 'enable' and (args.gpu_current or args.shader_layer)
     expected['MAVK_GUARD_CSE'] = '1'

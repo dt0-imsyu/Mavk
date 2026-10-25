@@ -21,6 +21,7 @@
 #include <chrono>
 #include "shader_stage_chain.hpp"
 #include "descriptor_layout_shape.hpp"
+#include "uniform_metadata.hpp"
 
 #define MAVK_EXPORT extern "C" __attribute__((visibility("default")))
 MAVK_EXPORT PFN_vkVoidFunction VKAPI_CALL mavkGetInstanceProcAddr(VkInstance,const char*);
@@ -58,12 +59,28 @@ struct Image {std::shared_ptr<ImageOwner> owner;VkImageUsageFlags usage{};};
 struct View {std::shared_ptr<ViewOwner> owner;VkImage image{};bool registered=false;};
 struct Layout {std::vector<VkDescriptorSetLayoutBinding> bindings;std::shared_ptr<SetLayoutOwner> owner;bool trackable=false,nativeSampler=false,deferred=false;std::shared_ptr<const ImmutableSamplerBindings> immutable;};
 bool emptyLayout(const Layout& layout){return std::none_of(layout.bindings.begin(),layout.bindings.end(),[](const auto& b){return b.descriptorCount!=0;});}
-struct Set {VkDescriptorPool pool{};bool tracked=false,nativeSampler=false,deferred=false;};
+struct Set {VkDescriptorPool pool{};bool tracked=false,nativeSampler=false,deferred=false,nativeReady=false,nativeSealed=false;};
 struct UpdateTemplate {std::unique_ptr<VulkanDescriptorUpdates::UpdateTemplate> shadow;};
 struct PipelineSchema {
     std::vector<Layout> sets;std::vector<VkPushConstantRange> push;
     std::shared_ptr<SetLayoutOwner> guard;std::shared_ptr<PipelineLayoutOwner> owner;
+    bool uniformMetadata=false;
 };
+uint64_t metadataWordCount(const PipelineSchema& schema,const std::set<std::pair<uint32_t,uint32_t>>* selected=nullptr){
+    uint32_t sets=0;
+    auto included=[&](uint32_t set,const VkDescriptorSetLayoutBinding& b){return b.descriptorCount&&!schema.sets[set].nativeSampler&&(!selected||selected->count({set,b.binding}));};
+    for(uint32_t set=0;set<schema.sets.size();set++)for(const auto& b:schema.sets[set].bindings)if(included(set,b))sets=set+1;
+    if(!sets)return 0;uint64_t words=1+3*sets;
+    for(uint32_t set=0;set<sets;set++){
+        uint64_t span=1,entries=0,formats=0;
+        for(const auto& b:schema.sets[set].bindings)if(included(set,b)){
+            span=std::max(span,uint64_t(b.binding)+1);entries+=b.descriptorCount;
+            if(b.descriptorType==VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER||b.descriptorType==VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER)formats+=b.descriptorCount;
+        }
+        words+=2*span+entries+(formats?span+formats:0);
+    }
+    return words;
+}
 struct PipelineShadow {
     std::shared_ptr<const PipelineSchema> schema;std::vector<std::shared_ptr<const GuardCompiler::Words>> shaders;
     std::shared_ptr<PipelineOwner> owner;std::shared_ptr<NativeDescriptorAdapter> descriptors;size_t bytes=0;
@@ -113,7 +130,7 @@ struct Device {
     bool guarded=false,fragmentStores=false,vertexStores=false,guardReports=true,profile=false,trace=false;uint64_t guardedDraws=0,submissions=0,diagnosticWords=0,diagnosticReads=0;
     uint64_t profileGuardNs=0,profileWaitNs=0,profilePresentNs=0,profileGuardCalls=0,profileWaitCalls=0,profilePresents=0;
     uint64_t profileSemaphoreNs=0,profileSemaphoreCalls=0,profileSubmitNs=0,profileSubmitCalls=0;
-    uint64_t profileSnapshotNs=0,profileMaterializeNs=0,profileMaterializations=0,profileMetadataBytes=0,profileNativeBinds=0,profileDiagnosticAllocations=0,profileArenaAllocations=0;
+    uint64_t profileSnapshotNs=0,profileMaterializeNs=0,profileMaterializations=0,profileMetadataBytes=0,profileNativeBinds=0,profileDiagnosticAllocations=0,profileArenaAllocations=0,profileNativePublic=0;
     std::chrono::steady_clock::time_point profileSince=std::chrono::steady_clock::now();
     bool gpuProfile=false;std::vector<VkQueueFamilyProperties> gpuFamilies;
     std::vector<std::unique_ptr<GpuSample>> gpuSamples;
@@ -126,7 +143,7 @@ struct Device {
     bool testTexelMetadata=false;uint32_t testTexelMetadataRecords=0;
     bool cullPipelines=false,nativeGeometry=false,nativeTessellation=false,nativeMultiview=false;
     bool uniformBufferStandardLayout=false;
-    bool metadataReadOnly=false,shareQuietLog=false,useMetadataArena=false;
+    bool metadataReadOnly=false,shareQuietLog=false,useMetadataArena=false,useUniformMetadata=false,useNativePublic=false;
     bool optimizeMetadataReads=false;
     size_t shaderCacheEntries=4,shaderCacheBytes=2*1024*1024;
     bool shaderCacheProfile=false;uint64_t shaderCalls=0,shaderCompiled=0,shaderHits=0,shaderNs=0;
@@ -212,6 +229,9 @@ VKAPI_ATTR VkResult VKAPI_CALL createDevice(VkPhysicalDevice gpu,const VkDeviceC
         const auto quietLog=std::getenv("MAVK_SHARED_DIAGNOSTICS");state->shareQuietLog=quietLog&&std::strcmp(quietLog,"1")==0;
         if(state->shareQuietLog)std::fprintf(stderr,"MAVK_DIAGNOSTIC_STORAGE sharedReadOnly=%u\n",unsigned(!state->guardReports));
         const auto arena=std::getenv("MAVK_DESCRIPTOR_ARENA");state->useMetadataArena=arena&&std::strcmp(arena,"1")==0;
+        const auto uniform=std::getenv("MAVK_UNIFORM_GUARD_METADATA");state->useUniformMetadata=uniform&&std::strcmp(uniform,"1")==0;
+        const auto nativePublic=std::getenv("MAVK_NATIVE_BOUND_SETS");state->useNativePublic=nativePublic&&std::strcmp(nativePublic,"1")==0;
+        if(state->useUniformMetadata)std::fprintf(stderr,"MAVK_METADATA_UNIFORM requested=1 std140=1\n");
         const auto trace=std::getenv("MAVK_LAYER_TRACE");state->trace=trace&&std::strcmp(trace,"1")==0;
         const auto cull=std::getenv("MAVK_EXPERIMENTAL_CULL_PIPELINES");state->cullPipelines=cull&&std::strcmp(cull,"1")==0;
         std::fprintf(stderr,"MAVK_LAYER_TRACE_POLICY events=%u errors=always\n",unsigned(state->trace));
@@ -422,7 +442,7 @@ VKAPI_ATTR VkResult VKAPI_CALL allocateSets(VkDevice h,const VkDescriptorSetAllo
         if(!ci->pNext&&layout!=state->layouts.end()&&layout->second.deferred){item->second.deferred=true;continue;}
         if(ci->pNext||layout==state->layouts.end()||!layout->second.trackable){state->gap("vkAllocateDescriptorSets","opaque/extended layout");continue;}
         VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};info.bindingCount=layout->second.bindings.size();info.pBindings=layout->second.bindings.data();
-        state->updates->registerSet(out[i],info);item->second.tracked=true;
+        state->updates->registerSet(out[i],info);item->second.tracked=true;item->second.nativeReady=state->useNativePublic;
     }catch(const std::exception& e){state->gap("vkAllocateDescriptorSets",e.what());}
     return result;
 }
@@ -436,6 +456,30 @@ VKAPI_ATTR VkResult VKAPI_CALL resetPool(VkDevice h,VkDescriptorPool pool,VkDesc
 }
 VKAPI_ATTR void VKAPI_CALL destroyPool(VkDevice h,VkDescriptorPool pool,const VkAllocationCallbacks* alloc){
     auto state=device(h);if(!state)return;{std::lock_guard lock(state->mutex);state->retirePool(pool);}state->fn<PFN_vkDestroyDescriptorPool>("vkDestroyDescriptorPool")(h,pool,alloc);
+}
+// Optional ordinary-set passthrough maintains native contents at the original
+// application update point. Copies/templates/null/extended updates conservatively
+// retire eligibility for that set; they retain the established snapshot path.
+void mirrorOrdinaryWrites(Device& s,uint32_t wc,const VkWriteDescriptorSet* writes,uint32_t cc,const VkCopyDescriptorSet* copies){
+    if(!s.useNativePublic)return;
+    for(uint32_t i=0;i<cc;i++){auto at=s.sets.find(copies[i].dstSet);if(at!=s.sets.end())at->second.nativeReady=false;}
+    for(uint32_t i=0;i<wc;i++){
+        const auto& w=writes[i];auto at=s.sets.find(w.dstSet);if(at==s.sets.end()||!at->second.nativeReady)continue;
+        // Once referenced by a recorded command, never overwrite native contents.
+        // A later logical update falls back while older command snapshots survive.
+        if(at->second.nativeSealed){at->second.nativeReady=false;continue;}
+        bool safe=!w.pNext;
+        for(uint32_t j=0;j<w.descriptorCount&&safe;j++)switch(w.descriptorType){
+        case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:safe=w.pBufferInfo&&w.pBufferInfo[j].buffer;break;
+        case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:safe=w.pTexelBufferView&&w.pTexelBufferView[j];break;
+        case VK_DESCRIPTOR_TYPE_SAMPLER:safe=w.pImageInfo&&w.pImageInfo[j].sampler;break;
+        case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:safe=w.pImageInfo&&w.pImageInfo[j].imageView&&w.pImageInfo[j].sampler;break;
+        case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:safe=w.pImageInfo&&w.pImageInfo[j].imageView;break;
+        default:safe=false;break;
+        }
+        if(!safe){at->second.nativeReady=false;continue;}
+        s.fn<PFN_vkUpdateDescriptorSets>("vkUpdateDescriptorSets")(s.handle,1,&w,0,nullptr);
+    }
 }
 VKAPI_ATTR void VKAPI_CALL updateSets(VkDevice h,uint32_t wc,const VkWriteDescriptorSet* writes,uint32_t cc,const VkCopyDescriptorSet* copies){
     auto state=device(h);if(!state)return;
@@ -461,7 +505,7 @@ VKAPI_ATTR void VKAPI_CALL updateSets(VkDevice h,uint32_t wc,const VkWriteDescri
             }
             // Copies involving the native heap require explicit classification.
             for(uint32_t i=0;i<cc;i++)for(auto set:{copies[i].srcSet,copies[i].dstSet}){auto at=state->sets.find(set);if(at!=state->sets.end()&&at->second.nativeSampler)throw std::invalid_argument("native sampler heap copy not implemented");}
-            if(logical.size()!=wc){state->updates->update(uint32_t(logical.size()),logical.data(),cc,copies);state->commonWrites+=logical.size();state->commonCopies+=cc;return;}
+            if(logical.size()!=wc){state->updates->update(uint32_t(logical.size()),logical.data(),cc,copies);mirrorOrdinaryWrites(*state,uint32_t(logical.size()),logical.data(),cc,copies);state->commonWrites+=logical.size();state->commonCopies+=cc;return;}
         }catch(const std::exception& e){state->gap("vkUpdateDescriptorSets",e.what());for(uint32_t i=0;i<wc;i++)state->invalidateSet(writes[i].dstSet);return;}
     }
     try{
@@ -482,6 +526,7 @@ VKAPI_ATTR void VKAPI_CALL updateSets(VkDevice h,uint32_t wc,const VkWriteDescri
             writes=injected.data();std::fprintf(stderr,"MAVK_LAYER_NULL_INJECTION imageSlots=1\n");
         }
         state->updates->update(wc,writes,cc,copies);state->commonWrites+=wc;state->commonCopies+=cc;
+        if(state->guarded)mirrorOrdinaryWrites(*state,wc,writes,cc,copies);
         if(state->trace)std::fprintf(stderr,"MAVK_LAYER_UPDATE common=1 writes=%u copies=%u\n",wc,cc);
     }catch(const std::exception& e){state->gap("vkUpdateDescriptorSets",e.what());
         for(uint32_t i=0;i<wc;i++)state->invalidateSet(originalWrites[i].dstSet);for(uint32_t i=0;i<cc;i++)state->invalidateSet(copies[i].dstSet);
@@ -512,7 +557,9 @@ void updateTemplateNamed(VkDevice h,VkDescriptorSet set,VkDescriptorUpdateTempla
     auto fn=state->fn<PFN_vkUpdateDescriptorSetWithTemplate>(name);if(!fn)return;if(!state->guarded)fn(h,set,descriptorTemplate,data);
     std::lock_guard lock(state->mutex);
     try{auto record=state->templates.find(descriptorTemplate);if(record==state->templates.end()||!record->second.shadow)throw std::invalid_argument("untracked descriptor template");
-        const auto& compiled=*record->second.shadow;state->updates->updateWithTemplate(set,compiled,data,compiled.requiredBytes());state->commonTemplates++;
+        std::function<void(uint32_t,const VkWriteDescriptorSet*)> mirror;
+        if(state->guarded&&state->useNativePublic)mirror=[&](uint32_t count,const VkWriteDescriptorSet* writes){mirrorOrdinaryWrites(*state,count,writes,0,nullptr);};
+        const auto& compiled=*record->second.shadow;state->updates->updateWithTemplate(set,compiled,data,compiled.requiredBytes(),mirror);state->commonTemplates++;
         if(state->trace)std::fprintf(stderr,"MAVK_LAYER_TEMPLATE common=1 sourceBytes=%zu\n",compiled.requiredBytes());
     }catch(const std::exception& e){state->gap(name,e.what());state->invalidateSet(set);}
 }
@@ -547,6 +594,12 @@ VKAPI_ATTR VkResult VKAPI_CALL createPipelineLayout(VkDevice h,const VkPipelineL
             if(alloc)throw std::invalid_argument("guarded pipeline layout allocator unsupported");
             auto guard=std::make_shared<SetLayoutOwner>();guard->device=h;guard->destroy=state->fn<PFN_vkDestroyDescriptorSetLayout>("vkDestroyDescriptorSetLayout");
             VkDescriptorSetLayoutBinding bindings[]={{0,VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,1,VK_SHADER_STAGE_ALL,nullptr},{1,VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,1,VK_SHADER_STAGE_ALL,nullptr}};
+            if(state->useUniformMetadata){
+                uint64_t uniforms=0;for(const auto& set:schema->sets)for(const auto& b:set.bindings)if(b.descriptorType==VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER||b.descriptorType==VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC)uniforms+=b.descriptorCount;
+                const auto words=metadataWordCount(*schema);const auto& limits=state->core->properties().limits;
+                schema->uniformMetadata=words&&words<=1024&&words*16<=limits.maxUniformBufferRange&&uniforms+1<=limits.maxPerStageDescriptorUniformBuffers&&uniforms+1<=limits.maxDescriptorSetUniformBuffers;
+                if(schema->uniformMetadata)bindings[1].descriptorType=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            }
             VkDescriptorSetLayoutCreateInfo gi{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};gi.bindingCount=2;gi.pBindings=bindings;
             descriptor_detail::check(state->fn<PFN_vkCreateDescriptorSetLayout>("vkCreateDescriptorSetLayout")(h,&gi,nullptr,&guard->handle),"private guard layout");guard->owns=true;schema->guard=std::move(guard);
         }
@@ -605,6 +658,7 @@ std::shared_ptr<PipelineShadow> preparePipeline(Device& state,VkPipelineLayout l
         else std::fprintf(stderr,"MAVK_LAYER_DESCRIPTOR_FREE stages=%u native=1\n",count);return shadow;
     }
     const auto publicSets=uint32_t(schema->second->sets.size());
+    const auto uniformWords=schema->second->uniformMetadata?metadataWordCount(*schema->second,&shadow->requiredBindings):0;
     for(uint32_t i=0;i<count;i++){
         if(!stageUses[i]){shadow->shaders.push_back(originals[i]);shadow->bytes+=originals[i]->size()*4;continue;}
         const bool reports=state.guardReports&&(stages[i].stage==VK_SHADER_STAGE_COMPUTE_BIT||(stages[i].stage==VK_SHADER_STAGE_FRAGMENT_BIT?state.fragmentStores:state.vertexStores));
@@ -622,6 +676,8 @@ std::shared_ptr<PipelineShadow> preparePipeline(Device& state,VkPipelineLayout l
         const auto shaderBefore=state.shaderCacheProfile?compiler->second->stats():GuardCompilerStats{};
         const auto shaderStart=state.shaderCacheProfile?std::chrono::steady_clock::now():std::chrono::steady_clock::time_point{};
         auto guarded=compiler->second->compile(*source);
+        if(uniformWords)
+            guarded=std::make_shared<const GuardCompiler::Words>(uniformGuardMetadata(*guarded,publicSets,uniformWords,target,state.uniformBufferStandardLayout));
         if(state.shaderCacheProfile){
             const auto after=compiler->second->stats();++state.shaderCalls;
             state.shaderCompiled+=after.compiled-shaderBefore.compiled;state.shaderHits+=after.hits-shaderBefore.hits;
@@ -650,6 +706,7 @@ std::shared_ptr<PipelineShadow> preparePipeline(Device& state,VkPipelineLayout l
         std::vector<DescriptorBinding> common;BorrowedDescriptorLayouts native;
         native.diagnosticWrites=state.guardReports||!state.shareQuietLog;
         if(state.useMetadataArena){if(!state.metadataArena)state.metadataArena=std::make_shared<DescriptorMetadataArena>(*state.core);native.metadataArena=state.metadataArena;}
+        native.uniformMetadataWords=uint32_t(uniformWords);
         for(uint32_t set=0;set<publicSets;set++){
             const auto& s=schema->second->sets[set];native.sets.push_back(s.owner->handle);
             if(!shadow->requiredSets[set]){native.externalSets.push_back(set);continue;}

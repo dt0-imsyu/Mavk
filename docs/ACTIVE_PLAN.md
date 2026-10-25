@@ -1,5 +1,13 @@
 # Active development order — 2026-10-17
 
+LATEST: UNIFORM_METADATA_AND_NATIVE_SETS_2026-10-25.md. Uniform metadata no game
+gain (12.1/12.2). Native public descriptors now avoid~99% of public snapshot
+duplication with checked null/template/lifetime fallback;14 GPU runs PASS.
+Real game13.0/s/menu35.2; differing thermals forbid a proven speedup claim.
+These are private default-OFF candidates, NOT the installed runtime. Muck profile
+restored/inactive; game quit; USB stay-awake enabled. Next: dominant shader/driver
+versus engine cost, NOT further descriptor/UBO completeness or resolution cuts.
+
 CURRENT installed source APK6c8680f5/runtime3bd128, normal Steam+Muck AHB smoke
 PASS; only portable FEX child-environment fix added. DDNet still fails before
 Vulkan, now isolated with x86-64 true loader/sbrk()/127; HL2 not installed.

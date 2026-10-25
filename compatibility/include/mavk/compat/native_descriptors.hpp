@@ -24,7 +24,7 @@ struct NativeDescriptorCounters {uint64_t poolCreates=0,metadataUploads=0,update
 class DescriptorMetadataArena {
 public:
     struct Slice {std::shared_ptr<mavk::Buffer> buffer;VkDeviceSize offset=0,bytes=0;};
-    explicit DescriptorMetadataArena(mavk::DeviceContext& context):context_(context),alignment_(std::max(VkDeviceSize(1),context.properties().limits.minStorageBufferOffsetAlignment)){}
+    explicit DescriptorMetadataArena(mavk::DeviceContext& context):context_(context),alignment_(std::max({VkDeviceSize(1),context.properties().limits.minStorageBufferOffsetAlignment,context.properties().limits.minUniformBufferOffsetAlignment})){}
     Slice allocate(VkDeviceSize bytes){
         if(!bytes||bytes>context_.properties().limits.maxStorageBufferRange)throw std::invalid_argument("metadata arena range");
         if(!poolable_||bytes>pageBytes_)return {make(bytes),0,bytes};
@@ -43,7 +43,7 @@ public:
     uint64_t allocations() const{return allocations_;}
 private:
     std::shared_ptr<mavk::Buffer> make(VkDeviceSize bytes){
-        auto result=std::make_shared<mavk::Buffer>(context_,bytes,VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        auto result=std::make_shared<mavk::Buffer>(context_,bytes,VK_BUFFER_USAGE_STORAGE_BUFFER_BIT|VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
         allocations_++;return result;
     }
     mavk::DeviceContext& context_;VkDeviceSize alignment_,cursor_=0;
@@ -63,6 +63,7 @@ struct BorrowedDescriptorLayouts {
     std::vector<DescriptorBinding> allocationBindings;
     bool diagnosticWrites=true;
     std::shared_ptr<DescriptorMetadataArena> metadataArena;
+    uint32_t uniformMetadataWords=0;
 };
 namespace descriptor_detail {
 inline bool readableImageLayout(VkImageLayout layout,VkImageAspectFlags aspects){switch(layout){
@@ -102,6 +103,7 @@ struct Layouts {
     std::vector<DescriptorBinding> allocationBindings;
     bool diagnosticWrites=true;
     std::shared_ptr<DescriptorMetadataArena> metadataArena;
+    uint32_t uniformMetadataWords=0;
     std::shared_ptr<mavk::Buffer> quietLog;
     struct DynamicSlot {DescriptorKind kind;size_t row,element,resource;};
     std::vector<DynamicSlot> dynamicSlots;
@@ -156,7 +158,7 @@ private:
     std::shared_ptr<descriptor_detail::Layouts> layouts_;std::shared_ptr<const DescriptorSnapshot> cpu_;
     std::vector<NativeDescriptorResource> resources_;std::shared_ptr<mavk::Buffer> metadata_,log_;
     VkDeviceSize metadataOffset_=0,metadataBytes_=0;
-    VkDescriptorPool pool_{};std::vector<VkDescriptorSet> sets_;bool counted_=false;
+    VkDescriptorPool pool_{};std::vector<VkDescriptorSet> sets_;bool counted_=false,nativePublic_=false;
 };
 // Bounded native backend API,not a loader layer or complete VkDescriptor API.
 // Public sets followed by one private guard set; caller supplies real shader/layout
@@ -191,6 +193,8 @@ public:
         layouts_->immutableBindings=std::move(native.immutableBindings);
         layouts_->diagnosticWrites=native.diagnosticWrites;
         layouts_->metadataArena=std::move(native.metadataArena);
+        layouts_->uniformMetadataWords=native.uniformMetadataWords;
+        if(native.uniformMetadataWords>1024||uint64_t(native.uniformMetadataWords)*16>context.properties().limits.maxUniformBufferRange)throw std::invalid_argument("uniform metadata range");
         layouts_->ownsNative=false;layouts_->device=context.vkDevice();layouts_->dispatch=context.dispatch();layouts_->limits=context.properties().limits;
         layouts_->bindings=std::move(bindings);layouts_->sets=std::move(native.sets);layouts_->pipeline=native.pipeline;layouts_->nativeOwner=std::move(native.owner);layouts_->externalSets=std::move(native.externalSets);
         layouts_->configureAllocation(std::move(native.allocationBindings));
@@ -224,14 +228,21 @@ public:
     // Resolver/resource mapping must remain stable for a CPU generation. If a
     // caller replaces its typed fallback mapping,explicitly drop this weak key.
     void invalidateResolverCache(){cache_.reset();}
-    std::shared_ptr<NativeDescriptorSnapshot> materialize(std::shared_ptr<const DescriptorSnapshot> cpu,const Resolver& resolve){
+    std::shared_ptr<NativeDescriptorSnapshot> materialize(std::shared_ptr<const DescriptorSnapshot> cpu,const Resolver& resolve,bool nativePublic=false){
         if(!cpu||cpu->abi!=abi_||!resolve||cpu->bindings.size()!=layouts_->bindings.size()||cpu->values.size()!=cpu->bindings.size()||cpu->metadata.empty()||cpu->metadata.size()>131072)
             throw std::invalid_argument("native descriptor snapshot shape");
         for(size_t i=0;i<cpu->bindings.size();i++){
             const auto& a=cpu->bindings[i];const auto& b=layouts_->bindings[i];if(a.set!=b.set||a.binding!=b.binding||a.count!=b.count||a.kind!=b.kind||cpu->values[i].size()!=b.count)throw std::invalid_argument("native snapshot/layout mismatch");
         }
-        if(auto cached=cache_.lock())if(cached->cpu_.get()==cpu.get())return cached;
+        // Only borrowed Vulkan layouts admit application-owned ordinary sets.
+        // Null descriptors still require the existing typed snapshot fallback.
+        if(nativePublic){
+            if(layouts_->ownsNative)throw std::invalid_argument("native public sets require borrowed layouts");
+            for(const auto& row:cpu->values)for(const auto& value:row)if(value.status!=DescriptorStatus::Bound)throw std::invalid_argument("native public sets require bound resources");
+        }
+        if(auto cached=cache_.lock())if(cached->cpu_.get()==cpu.get()&&cached->nativePublic_==nativePublic)return cached;
         auto result=std::shared_ptr<NativeDescriptorSnapshot>(new NativeDescriptorSnapshot(layouts_,std::move(cpu)));
+        result->nativePublic_=nativePublic;
         // Resolve/check everything before allocations/descriptor updates. Native
         // API never receives null handles: shader guards supply logical nulls.
         for(size_t row=0;row<layouts_->bindings.size();row++)for(uint32_t i=0;i<layouts_->bindings[row].count;i++){
@@ -260,27 +271,31 @@ public:
             result->resources_.push_back(std::move(resource));
         }
         auto host=VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,coherent=VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-        result->metadataBytes_=result->cpu_->metadata.size()*sizeof(uint32_t);
+        if(layouts_->uniformMetadataWords&&result->cpu_->metadata.size()!=layouts_->uniformMetadataWords)throw std::invalid_argument("uniform metadata ABI word count");
+        result->metadataBytes_=layouts_->uniformMetadataWords?((result->cpu_->metadata.size()+3)/4)*16:result->cpu_->metadata.size()*sizeof(uint32_t);
         if(layouts_->metadataArena){auto slice=layouts_->metadataArena->allocate(result->metadataBytes_);result->metadata_=std::move(slice.buffer);result->metadataOffset_=slice.offset;}
-        else result->metadata_=std::make_shared<mavk::Buffer>(context_,result->metadataBytes_,VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,host,coherent);
-        std::memcpy(static_cast<unsigned char*>(result->metadata_->map())+result->metadataOffset_,result->cpu_->metadata.data(),result->metadataBytes_);result->metadata_->flush();
+        else result->metadata_=std::make_shared<mavk::Buffer>(context_,result->metadataBytes_,layouts_->uniformMetadataWords?VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT:VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,host,coherent);
+        auto target=static_cast<unsigned char*>(result->metadata_->map())+result->metadataOffset_;
+        if(layouts_->uniformMetadataWords){std::memset(target,0,result->metadataBytes_);std::memcpy(target,result->cpu_->metadata.data(),result->cpu_->metadata.size()*4);}
+        else std::memcpy(target,result->cpu_->metadata.data(),result->metadataBytes_);result->metadata_->flush();
         if(!layouts_->diagnosticWrites&&layouts_->quietLog)result->log_=layouts_->quietLog;
         else{
             result->log_=std::make_shared<mavk::Buffer>(context_,32768,VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,host,coherent);
             std::memset(result->log_->map(),0,32768);result->log_->flush();layouts_->counters->diagnosticAllocations++;
             if(!layouts_->diagnosticWrites)layouts_->quietLog=result->log_;
         }
-        std::vector<VkDescriptorPoolSize> sizes{{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,2}};
-        for(const auto& b:layouts_->allocationBindings){auto type=layouts_->nativeType(b);auto at=std::find_if(sizes.begin(),sizes.end(),[&](const auto& s){return s.type==type;});if(at==sizes.end())sizes.push_back({type,b.count});else at->descriptorCount+=b.count;}
+        std::vector<VkDescriptorPoolSize> sizes{{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,layouts_->uniformMetadataWords?1u:2u}};
+        if(layouts_->uniformMetadataWords)sizes.push_back({VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,1});
+        if(!nativePublic)for(const auto& b:layouts_->allocationBindings){auto type=layouts_->nativeType(b);auto at=std::find_if(sizes.begin(),sizes.end(),[&](const auto& s){return s.type==type;});if(at==sizes.end())sizes.push_back({type,b.count});else at->descriptorCount+=b.count;}
         result->sets_.resize(layouts_->sets.size(),VK_NULL_HANDLE);
         std::vector<VkDescriptorSetLayout> ownedLayouts;std::vector<uint32_t> ownedIndices;
-        for(uint32_t i=0;i<layouts_->sets.size();i++)if(std::find(layouts_->externalSets.begin(),layouts_->externalSets.end(),i)==layouts_->externalSets.end()){ownedIndices.push_back(i);ownedLayouts.push_back(layouts_->sets[i]);}
+        for(uint32_t i=0;i<layouts_->sets.size();i++)if((!nativePublic||i+1==layouts_->sets.size())&&std::find(layouts_->externalSets.begin(),layouts_->externalSets.end(),i)==layouts_->externalSets.end()){ownedIndices.push_back(i);ownedLayouts.push_back(layouts_->sets[i]);}
         std::vector<VkDescriptorSet> ownedSets(ownedLayouts.size());
         VkDescriptorPoolCreateInfo pool{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};pool.maxSets=uint32_t(ownedLayouts.size());pool.poolSizeCount=uint32_t(sizes.size());pool.pPoolSizes=sizes.data();descriptor_detail::check(layouts_->dispatch.vkCreateDescriptorPool(layouts_->device,&pool,nullptr,&result->pool_),"native descriptor pool");
         VkDescriptorSetAllocateInfo allocate{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};allocate.descriptorPool=result->pool_;allocate.descriptorSetCount=uint32_t(ownedLayouts.size());allocate.pSetLayouts=ownedLayouts.data();descriptor_detail::check(layouts_->dispatch.vkAllocateDescriptorSets(layouts_->device,&allocate,ownedSets.data()),"native descriptor sets");
         for(size_t i=0;i<ownedSets.size();i++)result->sets_[ownedIndices[i]]=ownedSets[i];
         std::vector<VkWriteDescriptorSet> writes;size_t index=0;
-        for(const auto& b:layouts_->bindings)for(uint32_t i=0;i<b.count;i++,index++){
+        if(!nativePublic)for(const auto& b:layouts_->bindings)for(uint32_t i=0;i<b.count;i++,index++){
             if(b.kind==DescriptorKind::Sampler&&layouts_->immutable(b))continue;
             VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};write.dstSet=result->sets_[b.set];write.dstBinding=b.binding;write.dstArrayElement=i;write.descriptorCount=1;write.descriptorType=layouts_->nativeType(b);
             if(b.kind==DescriptorKind::UniformBuffer||b.kind==DescriptorKind::StorageBuffer)write.pBufferInfo=&result->resources_[index].buffer;
@@ -288,7 +303,7 @@ public:
             else write.pImageInfo=&result->resources_[index].image;writes.push_back(write);
         }
         VkDescriptorBufferInfo guards[]={{result->log_->handle(),0,result->log_->size()},{result->metadata_->handle(),result->metadataOffset_,result->metadataBytes_}};
-        for(uint32_t i=0;i<2;i++){VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};write.dstSet=result->sets_.back();write.dstBinding=i;write.descriptorCount=1;write.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;write.pBufferInfo=&guards[i];writes.push_back(write);}
+        for(uint32_t i=0;i<2;i++){VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};write.dstSet=result->sets_.back();write.dstBinding=i;write.descriptorCount=1;write.descriptorType=i&&layouts_->uniformMetadataWords?VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;write.pBufferInfo=&guards[i];writes.push_back(write);}
         layouts_->dispatch.vkUpdateDescriptorSets(layouts_->device,uint32_t(writes.size()),writes.data(),0,nullptr);
         auto& count=*layouts_->counters;count.poolCreates++;count.metadataUploads++;count.updates++;count.liveSnapshots++;result->counted_=true;cache_=result;return result;
     }

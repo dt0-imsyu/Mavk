@@ -123,6 +123,7 @@ extern "C" void __wrap_vkCmdDrawIndexed(VkCommandBuffer c,uint32_t v,uint32_t i,
 #include "layer-texel-components.hpp"
 #include "layer-images.hpp"
 #include "layer-nested.hpp"
+#include "layer-metadata-arena.hpp"
 #include "layer-aggregate.hpp"
 #include "layer-vertex-robust.hpp"
 #include "layer-storage-texel.hpp"
@@ -133,6 +134,7 @@ int main(int argc,char** argv){try{
     if(root.vertexRobust){vertexRobustness(root,context,argv[2],argv[3]);if(!context.counters().empty())throw std::runtime_error("vertex robustness Core resource leak");return 0;}
     if(root.wideIndices){const auto valid=std::getenv("MAVK_WIDE_VALID");nestedBuffers(root,context,argv[1],valid&&std::strcmp(valid,"1")==0?0xA5A5A5A5u:0u);if(!context.counters().empty())throw std::runtime_error("wide buffer Core resource leak");return 0;}
     if(argc==5&&!std::strcmp(argv[4],"--nested")){nestedBuffers(root,context,argv[1],std::getenv("MAVK_TEST_STD430_VALID")?0xA5A5A5A5u:0u);if(!context.counters().empty())throw std::runtime_error("nested buffer Core resource leak");return 0;}
+    if(argc==5&&!std::strcmp(argv[4],"--arena-retention")){metadataArenaRetention(root,context,argv[1]);if(!context.counters().empty())throw std::runtime_error("metadata arena Core resource leak");return 0;}
     if(argc==5&&!std::strcmp(argv[4],"--record-overhead")){nestedBuffers(root,context,argv[1],0,true);if(!context.counters().empty())throw std::runtime_error("record benchmark Core resource leak");return 0;}
     if(argc==5&&!std::strcmp(argv[4],"--aggregate")){aggregateBuffers(root,context,argv[1]);if(!context.counters().empty())throw std::runtime_error("aggregate Core resource leak");return 0;}
     if(argc==5&&!std::strcmp(argv[4],"--missing-used")){dynamicBuffers(root,context,argv[1],3);if(!context.counters().empty())throw std::runtime_error("negative descriptor Core resource leak");return 0;}

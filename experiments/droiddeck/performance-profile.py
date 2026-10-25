@@ -9,6 +9,8 @@ parser.add_argument('action', choices=('enable', 'restore'))
 parser.add_argument('--gpu-layer', type=Path)
 parser.add_argument('--gpu-current', action='store_true', help='Profile the verified current runtime without selecting another layer')
 parser.add_argument('--guard-cse', action='store_true', help='Enable the existing checked metadata-read optimizer, retaining guards')
+parser.add_argument('--shared-diagnostics', action='store_true', help='Reuse zero diagnostic storage only when shader reports are disabled')
+parser.add_argument('--descriptor-arena', action='store_true', help='Suballocate immutable metadata with command-generation lifetime')
 parser.add_argument('--gpu-warmup-ms', type=int, default=30000)
 parser.add_argument('--shader-layer', type=Path)
 parser.add_argument('--metadata-read-only', action='store_true')
@@ -19,6 +21,12 @@ root = Path('/data/user/0/com.droiddeck.launcher.mavk/files')
 backup = root / 'mavk-perf/profile-backup.json'
 sources = (Path('/root/.config/droiddeck/game-environment.json'), root / 'game-environment.json')
 expected = {'MAVK_LAYER_PROFILE': '1'}
+if args.shared_diagnostics:
+    assert args.action == 'enable' and args.shader_layer
+    expected['MAVK_SHARED_DIAGNOSTICS'] = '1'
+if args.descriptor_arena:
+    assert args.action == 'enable' and args.shader_layer
+    expected['MAVK_DESCRIPTOR_ARENA'] = '1'
 if args.guard_cse:
     assert args.action == 'enable' and (args.gpu_current or args.shader_layer)
     expected['MAVK_GUARD_CSE'] = '1'

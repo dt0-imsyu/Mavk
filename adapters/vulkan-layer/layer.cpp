@@ -99,6 +99,7 @@ struct Device {
     std::map<VkQueue,QueueInfo> queueInfos;VkQueue imageQueue{};
     bool testSubmitRejected=false;
     VulkanDescriptorResources resources;std::unique_ptr<VulkanDescriptorUpdates> updates;
+    std::shared_ptr<DescriptorMetadataArena> metadataArena;
     std::map<VkBuffer,std::shared_ptr<BufferOwner>> buffers;
     std::map<VkImage,Image> images;std::map<VkImageView,View> views;
     std::map<VkSampler,std::shared_ptr<SamplerOwner>> samplers;
@@ -112,6 +113,7 @@ struct Device {
     bool guarded=false,fragmentStores=false,vertexStores=false,guardReports=true,profile=false,trace=false;uint64_t guardedDraws=0,submissions=0,diagnosticWords=0,diagnosticReads=0;
     uint64_t profileGuardNs=0,profileWaitNs=0,profilePresentNs=0,profileGuardCalls=0,profileWaitCalls=0,profilePresents=0;
     uint64_t profileSemaphoreNs=0,profileSemaphoreCalls=0,profileSubmitNs=0,profileSubmitCalls=0;
+    uint64_t profileSnapshotNs=0,profileMaterializeNs=0,profileMaterializations=0,profileMetadataBytes=0,profileNativeBinds=0,profileDiagnosticAllocations=0,profileArenaAllocations=0;
     std::chrono::steady_clock::time_point profileSince=std::chrono::steady_clock::now();
     bool gpuProfile=false;std::vector<VkQueueFamilyProperties> gpuFamilies;
     std::vector<std::unique_ptr<GpuSample>> gpuSamples;
@@ -124,7 +126,7 @@ struct Device {
     bool testTexelMetadata=false;uint32_t testTexelMetadataRecords=0;
     bool cullPipelines=false,nativeGeometry=false,nativeTessellation=false,nativeMultiview=false;
     bool uniformBufferStandardLayout=false;
-    bool metadataReadOnly=false;
+    bool metadataReadOnly=false,shareQuietLog=false,useMetadataArena=false;
     bool optimizeMetadataReads=false;
     size_t shaderCacheEntries=4,shaderCacheBytes=2*1024*1024;
     bool shaderCacheProfile=false;uint64_t shaderCalls=0,shaderCompiled=0,shaderHits=0,shaderNs=0;
@@ -143,7 +145,7 @@ struct Device {
         if(guardReports)for(auto& generation:command.generations)if(generation.use_count()==1){auto words=generation->readDiagnostics()[0];++diagnosticReads;diagnosticWords+=words;std::fprintf(stderr,"MAVK_LAYER_GUARD_LOG words=%u\n",words);}
         command.bound={};command.pipelines.clear();command.generations.clear();command.failed=false;command.recording=false;
     }
-    void clear(){gpuSamples.clear();commands.clear();imagePreludes.clear();pipelines.clear();pipelineLayouts.clear();shaders.clear();compilers.clear();sets.clear();updates.reset();templates.clear();resources=VulkanDescriptorResources{};views.clear();texels.clear();samplers.clear();images.clear();buffers.clear();layouts.clear();nullImages.reset();nullTexels.reset();nullBuffers.reset();if(core)std::fprintf(stderr,"MAVK_LAYER_CORE_END liveZero=%d\n",core->counters().empty());core.reset();}
+    void clear(){gpuSamples.clear();commands.clear();imagePreludes.clear();pipelines.clear();pipelineLayouts.clear();shaders.clear();compilers.clear();sets.clear();updates.reset();templates.clear();resources=VulkanDescriptorResources{};views.clear();texels.clear();samplers.clear();images.clear();buffers.clear();layouts.clear();nullImages.reset();nullTexels.reset();nullBuffers.reset();metadataArena.reset();if(core)std::fprintf(stderr,"MAVK_LAYER_CORE_END liveZero=%d\n",core->counters().empty());core.reset();}
 };
 std::mutex registryMutex;
 std::map<VkInstance,std::shared_ptr<Instance>> instances;
@@ -207,6 +209,9 @@ VKAPI_ATTR VkResult VKAPI_CALL createDevice(VkPhysicalDevice gpu,const VkDeviceC
         const auto mode=std::getenv("MAVK_LAYER_GUARDS");state->guarded=mode&&std::strcmp(mode,"1")==0;
         const auto reports=std::getenv("MAVK_GUARD_REPORTS");state->guardReports=!(reports&&std::strcmp(reports,"0")==0);
         const auto profile=std::getenv("MAVK_LAYER_PROFILE");state->profile=profile&&std::strcmp(profile,"1")==0;
+        const auto quietLog=std::getenv("MAVK_SHARED_DIAGNOSTICS");state->shareQuietLog=quietLog&&std::strcmp(quietLog,"1")==0;
+        if(state->shareQuietLog)std::fprintf(stderr,"MAVK_DIAGNOSTIC_STORAGE sharedReadOnly=%u\n",unsigned(!state->guardReports));
+        const auto arena=std::getenv("MAVK_DESCRIPTOR_ARENA");state->useMetadataArena=arena&&std::strcmp(arena,"1")==0;
         const auto trace=std::getenv("MAVK_LAYER_TRACE");state->trace=trace&&std::strcmp(trace,"1")==0;
         const auto cull=std::getenv("MAVK_EXPERIMENTAL_CULL_PIPELINES");state->cullPipelines=cull&&std::strcmp(cull,"1")==0;
         std::fprintf(stderr,"MAVK_LAYER_TRACE_POLICY events=%u errors=always\n",unsigned(state->trace));
@@ -643,6 +648,8 @@ std::shared_ptr<PipelineShadow> preparePipeline(Device& state,VkPipelineLayout l
     if(state.guarded){
         if(!schema->second->owner||!schema->second->guard)throw std::invalid_argument("augmented native layout missing");
         std::vector<DescriptorBinding> common;BorrowedDescriptorLayouts native;
+        native.diagnosticWrites=state.guardReports||!state.shareQuietLog;
+        if(state.useMetadataArena){if(!state.metadataArena)state.metadataArena=std::make_shared<DescriptorMetadataArena>(*state.core);native.metadataArena=state.metadataArena;}
         for(uint32_t set=0;set<publicSets;set++){
             const auto& s=schema->second->sets[set];native.sets.push_back(s.owner->handle);
             if(!shadow->requiredSets[set]){native.externalSets.push_back(set);continue;}

@@ -8,7 +8,8 @@ out=${MAVK_EXECUTION_OUTPUT:?Fresh output required}
 test ! -e "$out" || exit 20
 mkdir -p "$out"
 export LD_LIBRARY_PATH="$tools/usr/lib/x86_64-linux-gnu"
-export TMPDIR=/mnt/e/Mavk/artifacts/build-temp-20261018
+export TMPDIR=${MAVK_BUILD_TEMP:-/mnt/c/Users/denis/MainProjects/win11ontab/Mavk/artifacts-local/build-temp}
+mkdir -p "$TMPDIR"
 "$tools/usr/bin/aarch64-linux-gnu-g++" --sysroot="$tools" -std=c++17 -O2 \
  -I "$source/include/vulkan/include" -I "$repo/core/include" \
  -I /mnt/e/Mavk/artifacts/null-cube-harness-20261020 \

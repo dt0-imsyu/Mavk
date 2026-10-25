@@ -2,6 +2,7 @@
 #include <mavk/core.hpp>
 #include <mavk/compat/descriptors.hpp>
 #include <array>
+#include <algorithm>
 #include <cstring>
 #include <functional>
 #include <map>
@@ -19,7 +20,36 @@ struct NativeDescriptorResource {
     VkBufferView texelView{};uint64_t texelElements=0;
     VkImageAspectFlags imageAspects=VK_IMAGE_ASPECT_COLOR_BIT;
 };
-struct NativeDescriptorCounters {uint64_t poolCreates=0,metadataUploads=0,updates=0,liveSnapshots=0;};
+struct NativeDescriptorCounters {uint64_t poolCreates=0,metadataUploads=0,updates=0,liveSnapshots=0,diagnosticAllocations=0;};
+class DescriptorMetadataArena {
+public:
+    struct Slice {std::shared_ptr<mavk::Buffer> buffer;VkDeviceSize offset=0,bytes=0;};
+    explicit DescriptorMetadataArena(mavk::DeviceContext& context):context_(context),alignment_(std::max(VkDeviceSize(1),context.properties().limits.minStorageBufferOffsetAlignment)){}
+    Slice allocate(VkDeviceSize bytes){
+        if(!bytes||bytes>context_.properties().limits.maxStorageBufferRange)throw std::invalid_argument("metadata arena range");
+        if(!poolable_||bytes>pageBytes_)return {make(bytes),0,bytes};
+        // Recorded generations retain the buffer through every permitted resubmit.
+        if(current_&&current_.use_count()==1)cursor_=0;
+        const auto remainder=cursor_%alignment_;
+        const auto offset=remainder?cursor_+alignment_-remainder:cursor_;
+        if(!current_||offset>current_->size()||bytes>current_->size()-offset){
+            current_=make(std::max(pageBytes_,alignment_));
+            // Whole-allocation noncoherent flushes would overlap live slices.
+            if(!(context_.memoryFlags(current_->memoryType())&VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)){poolable_=false;current_.reset();cursor_=0;return {make(bytes),0,bytes};}
+            cursor_=bytes;return {current_,0,bytes};
+        }
+        cursor_=offset+bytes;return {current_,offset,bytes};
+    }
+    uint64_t allocations() const{return allocations_;}
+private:
+    std::shared_ptr<mavk::Buffer> make(VkDeviceSize bytes){
+        auto result=std::make_shared<mavk::Buffer>(context_,bytes,VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        allocations_++;return result;
+    }
+    mavk::DeviceContext& context_;VkDeviceSize alignment_,cursor_=0;
+    const VkDeviceSize pageBytes_=65536;
+    std::shared_ptr<mavk::Buffer> current_;uint64_t allocations_=0;bool poolable_=true;
+};
 // Exact native layouts from an API adapter. Owner must retain every public and
 // private layout plus pipeline layout until all recorded generations retire.
 struct BorrowedDescriptorLayouts {
@@ -31,6 +61,8 @@ struct BorrowedDescriptorLayouts {
     std::vector<std::pair<uint32_t,uint32_t>> dynamicBindings;
     std::vector<std::pair<uint32_t,uint32_t>> immutableBindings;
     std::vector<DescriptorBinding> allocationBindings;
+    bool diagnosticWrites=true;
+    std::shared_ptr<DescriptorMetadataArena> metadataArena;
 };
 namespace descriptor_detail {
 inline bool readableImageLayout(VkImageLayout layout,VkImageAspectFlags aspects){switch(layout){
@@ -68,6 +100,9 @@ struct Layouts {
     std::vector<std::pair<uint32_t,uint32_t>> dynamicBindings;
     std::vector<std::pair<uint32_t,uint32_t>> immutableBindings;
     std::vector<DescriptorBinding> allocationBindings;
+    bool diagnosticWrites=true;
+    std::shared_ptr<DescriptorMetadataArena> metadataArena;
+    std::shared_ptr<mavk::Buffer> quietLog;
     struct DynamicSlot {DescriptorKind kind;size_t row,element,resource;};
     std::vector<DynamicSlot> dynamicSlots;
     bool immutable(const DescriptorBinding& b) const{return std::binary_search(immutableBindings.begin(),immutableBindings.end(),std::make_pair(b.set,b.binding));}
@@ -114,12 +149,13 @@ public:
         }
     }
     // Caller must have completed GPU use before host read/reset of diagnostics.
-    const uint32_t* readDiagnostics(){log_->invalidate();return static_cast<const uint32_t*>(log_->map());}
+    const uint32_t* readDiagnostics(){if(!layouts_->diagnosticWrites)throw std::logic_error("diagnostic writes disabled");log_->invalidate();return static_cast<const uint32_t*>(log_->map());}
 private:
     friend class NativeDescriptorAdapter;
     NativeDescriptorSnapshot(std::shared_ptr<descriptor_detail::Layouts> layouts,std::shared_ptr<const DescriptorSnapshot> cpu):layouts_(std::move(layouts)),cpu_(std::move(cpu)){}
     std::shared_ptr<descriptor_detail::Layouts> layouts_;std::shared_ptr<const DescriptorSnapshot> cpu_;
-    std::vector<NativeDescriptorResource> resources_;std::unique_ptr<mavk::Buffer> metadata_,log_;
+    std::vector<NativeDescriptorResource> resources_;std::shared_ptr<mavk::Buffer> metadata_,log_;
+    VkDeviceSize metadataOffset_=0,metadataBytes_=0;
     VkDescriptorPool pool_{};std::vector<VkDescriptorSet> sets_;bool counted_=false;
 };
 // Bounded native backend API,not a loader layer or complete VkDescriptor API.
@@ -153,6 +189,8 @@ public:
             if((i&&key==native.immutableBindings[i-1])||b==declared.end()||(b->kind!=DescriptorKind::Sampler&&b->kind!=DescriptorKind::CombinedImageSampler))throw std::invalid_argument("immutable native binding schema");
         }
         layouts_->immutableBindings=std::move(native.immutableBindings);
+        layouts_->diagnosticWrites=native.diagnosticWrites;
+        layouts_->metadataArena=std::move(native.metadataArena);
         layouts_->ownsNative=false;layouts_->device=context.vkDevice();layouts_->dispatch=context.dispatch();layouts_->limits=context.properties().limits;
         layouts_->bindings=std::move(bindings);layouts_->sets=std::move(native.sets);layouts_->pipeline=native.pipeline;layouts_->nativeOwner=std::move(native.owner);layouts_->externalSets=std::move(native.externalSets);
         layouts_->configureAllocation(std::move(native.allocationBindings));
@@ -222,9 +260,16 @@ public:
             result->resources_.push_back(std::move(resource));
         }
         auto host=VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,coherent=VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-        result->metadata_=std::make_unique<mavk::Buffer>(context_,result->cpu_->metadata.size()*4,VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,host,coherent);
-        std::memcpy(result->metadata_->map(),result->cpu_->metadata.data(),result->cpu_->metadata.size()*4);result->metadata_->flush();
-        result->log_=std::make_unique<mavk::Buffer>(context_,32768,VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,host,coherent);std::memset(result->log_->map(),0,32768);result->log_->flush();
+        result->metadataBytes_=result->cpu_->metadata.size()*sizeof(uint32_t);
+        if(layouts_->metadataArena){auto slice=layouts_->metadataArena->allocate(result->metadataBytes_);result->metadata_=std::move(slice.buffer);result->metadataOffset_=slice.offset;}
+        else result->metadata_=std::make_shared<mavk::Buffer>(context_,result->metadataBytes_,VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,host,coherent);
+        std::memcpy(static_cast<unsigned char*>(result->metadata_->map())+result->metadataOffset_,result->cpu_->metadata.data(),result->metadataBytes_);result->metadata_->flush();
+        if(!layouts_->diagnosticWrites&&layouts_->quietLog)result->log_=layouts_->quietLog;
+        else{
+            result->log_=std::make_shared<mavk::Buffer>(context_,32768,VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,host,coherent);
+            std::memset(result->log_->map(),0,32768);result->log_->flush();layouts_->counters->diagnosticAllocations++;
+            if(!layouts_->diagnosticWrites)layouts_->quietLog=result->log_;
+        }
         std::vector<VkDescriptorPoolSize> sizes{{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,2}};
         for(const auto& b:layouts_->allocationBindings){auto type=layouts_->nativeType(b);auto at=std::find_if(sizes.begin(),sizes.end(),[&](const auto& s){return s.type==type;});if(at==sizes.end())sizes.push_back({type,b.count});else at->descriptorCount+=b.count;}
         result->sets_.resize(layouts_->sets.size(),VK_NULL_HANDLE);
@@ -242,7 +287,7 @@ public:
             else if(b.kind==DescriptorKind::UniformTexelBuffer||b.kind==DescriptorKind::StorageTexelBuffer)write.pTexelBufferView=&result->resources_[index].texelView;
             else write.pImageInfo=&result->resources_[index].image;writes.push_back(write);
         }
-        VkDescriptorBufferInfo guards[]={{result->log_->handle(),0,result->log_->size()},{result->metadata_->handle(),0,result->metadata_->size()}};
+        VkDescriptorBufferInfo guards[]={{result->log_->handle(),0,result->log_->size()},{result->metadata_->handle(),result->metadataOffset_,result->metadataBytes_}};
         for(uint32_t i=0;i<2;i++){VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};write.dstSet=result->sets_.back();write.dstBinding=i;write.descriptorCount=1;write.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;write.pBufferInfo=&guards[i];writes.push_back(write);}
         layouts_->dispatch.vkUpdateDescriptorSets(layouts_->device,uint32_t(writes.size()),writes.data(),0,nullptr);
         auto& count=*layouts_->counters;count.poolCreates++;count.metadataUploads++;count.updates++;count.liveSnapshots++;result->counted_=true;cache_=result;return result;

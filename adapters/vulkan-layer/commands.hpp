@@ -116,6 +116,9 @@ void reportProfileLocked(Device& s){
     if(seconds<1)return;
     // All observed operations can flush: an upper WSI layer may consume present.
     std::fprintf(stderr,"MAVK_LAYER_PROFILE seconds=%.3f presentCalls=%llu guardCalls=%llu guardWallMs=%.3f fenceWaitCalls=%llu fenceWaitWallMs=%.3f semaphoreWaitCalls=%llu semaphoreWaitWallMs=%.3f submitCalls=%llu submitWallMs=%.3f presentWallMs=%.3f uniqueFrames=unknown\n",seconds,(unsigned long long)s.profilePresents,(unsigned long long)s.profileGuardCalls,s.profileGuardNs/1e6,(unsigned long long)s.profileWaitCalls,s.profileWaitNs/1e6,(unsigned long long)s.profileSemaphoreCalls,s.profileSemaphoreNs/1e6,(unsigned long long)s.profileSubmitCalls,s.profileSubmitNs/1e6,s.profilePresentNs/1e6);
+    std::fprintf(stderr,"MAVK_DESCRIPTOR_PROFILE seconds=%.3f snapshotWallMs=%.3f materializeWallMs=%.3f materializations=%llu metadataBytes=%llu nativeBinds=%llu diagnosticAllocations=%llu metadataArenaAllocations=%llu\n",seconds,s.profileSnapshotNs/1e6,s.profileMaterializeNs/1e6,(unsigned long long)s.profileMaterializations,(unsigned long long)s.profileMetadataBytes,(unsigned long long)s.profileNativeBinds,(unsigned long long)s.profileDiagnosticAllocations,(unsigned long long)s.profileArenaAllocations);
+    s.profileSnapshotNs=s.profileMaterializeNs=s.profileMaterializations=s.profileMetadataBytes=s.profileNativeBinds=0;
+    s.profileDiagnosticAllocations=s.profileArenaAllocations=0;
     s.profileSince=now;
     s.profileGuardNs=s.profileWaitNs=s.profilePresentNs=s.profileGuardCalls=s.profileWaitCalls=s.profilePresents=0;
     s.profileSemaphoreNs=s.profileSemaphoreCalls=s.profileSubmitNs=s.profileSubmitCalls=0;
@@ -135,7 +138,9 @@ bool prepareExecution(Device& s,VkCommandBuffer h,VkPipelineBindPoint point){
         if(std::none_of(bound.pipeline->requiredSets.begin(),bound.pipeline->requiredSets.end(),[](bool used){return used;}))return true;
         if(!bound.pipeline->descriptors)throw std::invalid_argument("guarded descriptor adapter missing");
         std::vector<VkDescriptorSet> logical;std::vector<uint32_t> dynamicOffsets;for(uint32_t i=0;i<bound.pipeline->schema->sets.size();i++){const auto& set=bound.sets[i];const auto& schema=bound.pipeline->schema->sets[i];if(!bound.pipeline->requiredSets[i]){logical.push_back(VK_NULL_HANDLE);continue;}if(!set.set||!set.schema||!compatibleSet(*set.schema,*bound.pipeline->schema,i))throw std::invalid_argument("guarded descriptor compatibility");logical.push_back(schema.nativeSampler?VK_NULL_HANDLE:set.set);dynamicOffsets.insert(dynamicOffsets.end(),set.dynamicOffsets.begin(),set.dynamicOffsets.end());}
+        const auto snapshotStart=s.profile?std::chrono::steady_clock::now():std::chrono::steady_clock::time_point{};
         auto cpu=s.updates->snapshotUsedBindings(logical,GuardMetadataAbi::IndexInitFormats,bound.pipeline->resourceBindings);
+        if(s.profile)s.profileSnapshotNs+=uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-snapshotStart).count());
         if(s.testTexelMetadata&&s.testTexelMetadataRecords++<32){
             std::fprintf(stderr,"MAVK_TEST_TEXEL_METADATA generation=%llu words=",(unsigned long long)cpu->generation);
             for(size_t i=0;i<std::min(size_t(64),cpu->metadata.size());i++)std::fprintf(stderr,"%u,",cpu->metadata[i]);
@@ -169,7 +174,18 @@ bool prepareExecution(Device& s,VkCommandBuffer h,VkPipelineBindPoint point){
             if(value.status==DescriptorStatus::Null&&s.nullBuffers)return s.nullBuffers->resolve(binding,value);
             return VulkanDescriptorResources::resolve(binding,index,value);
         };
+        const auto materializeStart=s.profile?std::chrono::steady_clock::now():std::chrono::steady_clock::time_point{};
+        const auto priorUploads=s.profile?bound.pipeline->descriptors->counters().metadataUploads:0;
+        const auto priorDiagnostics=s.profile?bound.pipeline->descriptors->counters().diagnosticAllocations:0;
+        const auto priorArena=s.profile&&s.metadataArena?s.metadataArena->allocations():0;
         auto generation=bound.pipeline->descriptors->materialize(cpu,resolve);
+        if(s.profile){
+            s.profileMaterializeNs+=uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-materializeStart).count());
+            const auto uploads=bound.pipeline->descriptors->counters().metadataUploads-priorUploads;
+            s.profileMaterializations+=uploads;s.profileMetadataBytes+=uploads*cpu->metadata.size()*sizeof(uint32_t);
+            s.profileDiagnosticAllocations+=bound.pipeline->descriptors->counters().diagnosticAllocations-priorDiagnostics;
+            if(s.metadataArena)s.profileArenaAllocations+=s.metadataArena->allocations()-priorArena;
+        }
         generation->validateDynamicOffsets(dynamicOffsets);
         if(std::find(c.generations.begin(),c.generations.end(),generation)==c.generations.end())c.generations.push_back(generation);
         auto sets=generation->sets();for(uint32_t i=0;i<bound.pipeline->schema->sets.size();i++)if(bound.pipeline->requiredSets[i]&&bound.pipeline->schema->sets[i].nativeSampler){if(sets[i])throw std::invalid_argument("native sampler heap unexpectedly snapshotted");sets[i]=bound.sets[i].set;}
@@ -179,7 +195,7 @@ bool prepareExecution(Device& s,VkCommandBuffer h,VkPipelineBindPoint point){
             if(!sets[first]){first++;continue;}
             uint32_t end=first;std::vector<uint32_t> offsets;
             while(end<sets.size()&&sets[end]){if(end<bound.pipeline->schema->sets.size()){const auto& values=bound.sets[end].dynamicOffsets;offsets.insert(offsets.end(),values.begin(),values.end());}end++;}
-            s.fn<PFN_vkCmdBindDescriptorSets>("vkCmdBindDescriptorSets")(h,point,generation->pipelineLayout(),first,end-first,sets.data()+first,uint32_t(offsets.size()),offsets.data());first=end;
+            s.fn<PFN_vkCmdBindDescriptorSets>("vkCmdBindDescriptorSets")(h,point,generation->pipelineLayout(),first,end-first,sets.data()+first,uint32_t(offsets.size()),offsets.data());if(s.profile)s.profileNativeBinds++;first=end;
         }
         s.guardedDraws++;if(s.trace)std::fprintf(stderr,"MAVK_LAYER_EXECUTE guarded=1 sets=%zu generations=%zu\n",sets.size(),c.generations.size());return true;
     }catch(const std::exception& e){s.gap("guarded execution",e.what());c.failed=true;return false;}

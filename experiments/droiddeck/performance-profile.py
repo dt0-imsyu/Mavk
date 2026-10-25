@@ -7,6 +7,8 @@ from pathlib import Path
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('action', choices=('enable', 'restore'))
 parser.add_argument('--gpu-layer', type=Path)
+parser.add_argument('--gpu-current', action='store_true', help='Profile the verified current runtime without selecting another layer')
+parser.add_argument('--guard-cse', action='store_true', help='Enable the existing checked metadata-read optimizer, retaining guards')
 parser.add_argument('--gpu-warmup-ms', type=int, default=30000)
 parser.add_argument('--shader-layer', type=Path)
 parser.add_argument('--metadata-read-only', action='store_true')
@@ -17,11 +19,21 @@ root = Path('/data/user/0/com.droiddeck.launcher.mavk/files')
 backup = root / 'mavk-perf/profile-backup.json'
 sources = (Path('/root/.config/droiddeck/game-environment.json'), root / 'game-environment.json')
 expected = {'MAVK_LAYER_PROFILE': '1'}
+if args.guard_cse:
+    assert args.action == 'enable' and (args.gpu_current or args.shader_layer)
+    expected['MAVK_GUARD_CSE'] = '1'
 assert not (args.gpu_layer and args.shader_layer)
+assert not (args.gpu_current and (args.gpu_layer or args.shader_layer))
+if args.gpu_current:
+    assert args.action == 'enable'
+    baseline = Path(os.environ['DROIDDECK_MAVK_RUNTIME']) / 'payload/libVkLayer_mavk_compat.so'
+    assert b'hostResetBeforePoll=1' in baseline.read_bytes(), 'Require the corrected GPU query initialization'
+    expected.update(MAVK_GPU_PROBE='1', MAVK_GPU_PROBE_WARMUP_MS=str(args.gpu_warmup_ms))
 if args.shader_layer:
     assert args.action == 'enable'
     layer = args.shader_layer
-    assert layer.parent == root and layer.name.startswith('mavk-')
+    assert (layer.parent == root and layer.name.startswith('mavk-') or
+            layer.name == 'payload' and layer.parent.parent == root and layer.parent.name.startswith('mavk-'))
     assert (layer / 'libVkLayer_mavk_compat.so').is_file()
     assert (layer / 'VkLayer_mavk_compat.json').is_file()
     baseline = Path(os.environ['DROIDDECK_MAVK_RUNTIME']) / 'payload'

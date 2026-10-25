@@ -1,5 +1,21 @@
 # Active development order — 2026-10-17
 
+CURRENT installed source APK6c8680f5/runtime3bd128, normal Steam+Muck AHB smoke
+PASS; only portable FEX child-environment fix added. DDNet still fails before
+Vulkan, now isolated with x86-64 true loader/sbrk()/127; HL2 not installed.
+37 FEX/20 packaging regressions PASS. Detailed latest evidence in STATE.md and
+MUCK_GPU_PROFILE_AND_ARTIFACTS_2026-10-25.md. FPS/diagonal artifacts still open;
+do not spend another turn redoing these startup/resolution/menu tests.
+
+LATEST MUCK_GPU_PROFILE_AND_ARTIFACTS_2026-10-25.md: Steam is available, unlike
+historical reservations below. Live gameplay1600p/1200p both9.1 buffers/s; GPU
+batch spans and CPU attribution saved. Recurring diagonal black artifacts remain
+unresolved. GPU probe OFF; real CSE experiment rolled back through saved profile.
+Normal renderer restored, no new Mali errors, sampled screenshots clean; do not
+declare fixed. Thermal Status3 at end, Muck quit for cooldown, Steam left open.
+Prioritize bounded FPS/artifact localization and second real game, not more
+resolution/input/package polishing. Installed notices APK443c300b/runtime3bd128.
+
 LATEST SOURCE_APK_AND_MUCK_PACING_2026-10-25.md: source-built Gradle APK675e9cb6
 installed; full declared runtime APK verification + AMD64 Wine AHB/ResizeBuffers
 PASS CoreZero/gaps0. External prebuilt dependencies pinned, optional Rust skipped

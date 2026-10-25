@@ -70,6 +70,9 @@ for name in ("run-proton.py", "proton_d3d11.py"):
 for name in ("LICENSE", "THIRD_PARTY_NOTICES.md"):
     files["licenses/Mavk-" + name] = ((repo / name).read_bytes(), False)
 files["licenses/DroidDeck-GPL3-LICENSE"] = ((repo / "adapters/droiddeck/LICENSE.DroidDeck").read_bytes(), False)
+for notice in sorted((repo / "third_party/runtime-notices").rglob('*')):
+    if notice.is_file():
+        files['licenses/runtime-dependencies/' + notice.relative_to(repo / 'third_party/runtime-notices').as_posix()] = (notice.read_bytes(), False)
 sarek = Path("E:/Mavk/artifacts/sarek-native-source-20261018/source/LICENSE")
 files["licenses/Sarek-LICENSE"] = (sarek.read_bytes(), False)
 for name, original in {

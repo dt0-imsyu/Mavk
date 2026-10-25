@@ -1,0 +1,1037 @@
+{
+  "packages": [
+    {
+      "metadata": {
+        "pkgname": [
+          "startup-notification"
+        ],
+        "pkgver": [
+          "0.12-9"
+        ],
+        "url": [
+          "https://www.freedesktop.org/wiki/Software/startup-notification/"
+        ],
+        "arch": [
+          "aarch64"
+        ],
+        "license": [
+          "LGPL-2.0-or-later"
+        ]
+      },
+      "archive": "startup-notification-0.12-9-aarch64.pkg.tar.xz",
+      "archive_sha256": "b72c88dc1514f9b73c9a361e5bff8e3d58903eeed9e9e351f487e4c49246bd02",
+      "matched": [
+        {
+          "path": "usr/include/startup-notification-1.0/libsn/sn-common.h",
+          "sha256": "8f670deebece98828981cd71a15609435d998fae882fd1ad9c5673c6f134da04"
+        },
+        {
+          "path": "usr/include/startup-notification-1.0/libsn/sn-launchee.h",
+          "sha256": "9e454cbe38d3b3d6aeaf92cf932374b1dbf71d97bd9d74d29402ee5f273d7324"
+        },
+        {
+          "path": "usr/include/startup-notification-1.0/libsn/sn-launcher.h",
+          "sha256": "d1a4a5f322c695f7e9c586b9bedead3e826beea8804cac12150f09155344ae3e"
+        },
+        {
+          "path": "usr/include/startup-notification-1.0/libsn/sn-monitor.h",
+          "sha256": "def19e5ee91c1fc5a64df73272a02bc9bd122a080631809126e20a3d4599c751"
+        },
+        {
+          "path": "usr/include/startup-notification-1.0/libsn/sn-util.h",
+          "sha256": "7741cd4b3ccd72fbb1162c9fc470214404a4eefe2ac8bff82f6f61373017c869"
+        },
+        {
+          "path": "usr/include/startup-notification-1.0/libsn/sn.h",
+          "sha256": "90cc5ce0cfbf60277474747e258efb16cf51c2365a745988e54219800027bbb2"
+        },
+        {
+          "path": "usr/lib/libstartup-notification-1.so.0",
+          "sha256": "bcda4d529c9d787a13e74735e599c212afef2fec8c346696ba2a07aed5621d9f"
+        },
+        {
+          "path": "usr/lib/libstartup-notification-1.so.0.0.0",
+          "sha256": "bcda4d529c9d787a13e74735e599c212afef2fec8c346696ba2a07aed5621d9f"
+        },
+        {
+          "path": "usr/lib/pkgconfig/libstartup-notification-1.0.pc",
+          "sha256": "e6b27763f892e23657c81d06c6e3decdccce728f0b7d5382f95829d9108402f3"
+        }
+      ],
+      "mismatched": []
+    },
+    {
+      "metadata": {
+        "pkgname": [
+          "openbox"
+        ],
+        "pkgver": [
+          "3.6.1-14"
+        ],
+        "url": [
+          "https://openbox.org/"
+        ],
+        "arch": [
+          "aarch64"
+        ],
+        "license": [
+          "GPL-2.0-or-later"
+        ]
+      },
+      "archive": "openbox-3.6.1-14-aarch64.pkg.tar.xz",
+      "archive_sha256": "e7e83e974648155523fa703d1e7c33bb43784871aabb31fb3f8c144065e10ea5",
+      "matched": [
+        {
+          "path": "etc/xdg/openbox/autostart",
+          "sha256": "853bfbd76e0172883c30031ca1b539aa4983250a9b43d0bb3ebfe36cdd236f64"
+        },
+        {
+          "path": "etc/xdg/openbox/environment",
+          "sha256": "d31b90687e1a9cf10fe83cbfbffd1542f0f06d5d285c4414ab34fdba8ec84b5c"
+        },
+        {
+          "path": "etc/xdg/openbox/menu.xml",
+          "sha256": "363d478212fb1d577b8c29b12b04843145c84f33646c0cecdaed5855d220e96e"
+        },
+        {
+          "path": "etc/xdg/openbox/rc.xml",
+          "sha256": "2c16af0eb17c8bff7ba6222a80935b8fb34ffdcc693c43ea8c8fb843ed5e65b0"
+        },
+        {
+          "path": "usr/bin/gnome-panel-control",
+          "sha256": "cdb0b6181f628b2736254e91f5fd93dd1aee95e02e1c6625e4a2cc9758c0b08f"
+        },
+        {
+          "path": "usr/bin/obxprop",
+          "sha256": "bd9e304245edfec6d482c2a32c0fe926a6784a16430a7518d8e8111bb74099e5"
+        },
+        {
+          "path": "usr/bin/openbox",
+          "sha256": "066ce381641651ab72c696e0a60d0d5439f365509aa61bf1347bc80c04148d10"
+        },
+        {
+          "path": "usr/bin/openbox-session",
+          "sha256": "6315527e61d7aa3b3001e5e75061cfa398105ae79475ee42a364811c8b9655c5"
+        },
+        {
+          "path": "usr/include/openbox/3.6/obrender/color.h",
+          "sha256": "84d1e06beede7d1151068850b4a36df371e4a8b0f55aafac29acdbc838b1489a"
+        },
+        {
+          "path": "usr/include/openbox/3.6/obrender/font.h",
+          "sha256": "e3976ce7c4b3011f4d45c5337e3a407f0b14479fb31daa301e8f1939c632d794"
+        },
+        {
+          "path": "usr/include/openbox/3.6/obrender/geom.h",
+          "sha256": "995609a438f6b5f31ee440b0ba837a7422699ca8c75af18bf6dbdbcc5df202f6"
+        },
+        {
+          "path": "usr/include/openbox/3.6/obrender/gradient.h",
+          "sha256": "40c1ebbdfa309a841370f760fb6b4d21a57977e32a22878ae5f1ebd1efaf1311"
+        },
+        {
+          "path": "usr/include/openbox/3.6/obrender/image.h",
+          "sha256": "72843fbdc4cff8c28f51b7f50f8e52065f2ddf8b5035b60153d014aeb77da774"
+        },
+        {
+          "path": "usr/include/openbox/3.6/obrender/instance.h",
+          "sha256": "096528f44af08a6601771c15a4232a7dab86d3d78ad64e9bf8f2c9f6497cda68"
+        },
+        {
+          "path": "usr/include/openbox/3.6/obrender/mask.h",
+          "sha256": "6a20f5c8b87b8add3c262e80185d24a4029cdecac4398d326cf8c9919dd21643"
+        },
+        {
+          "path": "usr/include/openbox/3.6/obrender/render.h",
+          "sha256": "127495c76e240a00877682ce40ac5caff08b43cbc8f5a29a2007df040a65f52d"
+        },
+        {
+          "path": "usr/include/openbox/3.6/obrender/theme.h",
+          "sha256": "d3ecbd417c6f715d9e45e94b5f447974071dc2b39bf0cb79bcb2d48131524dd7"
+        },
+        {
+          "path": "usr/include/openbox/3.6/obrender/version.h",
+          "sha256": "03489ccd70a4dcee79771ee7790bd7d979e0d42540047de63fc9004521b49ff2"
+        },
+        {
+          "path": "usr/include/openbox/3.6/obt/display.h",
+          "sha256": "92b9fdeb15743b32fb603c4ffebc59ce4c299ed0c91ba24ba080bdc91e48dbf1"
+        },
+        {
+          "path": "usr/include/openbox/3.6/obt/keyboard.h",
+          "sha256": "4dcac40c6f3300e917daed3e3127ae691449a006fb3f136cda75988f55f54ef5"
+        },
+        {
+          "path": "usr/include/openbox/3.6/obt/link.h",
+          "sha256": "2f020f5ad901bc3d657da7973af8d89dcd84b341fa71ac3411a23b86c33990c3"
+        },
+        {
+          "path": "usr/include/openbox/3.6/obt/paths.h",
+          "sha256": "45e860fe85eeecbf2e23151807bb363b72e07a9c59c5dc70a3b6f57f7a9fc46b"
+        },
+        {
+          "path": "usr/include/openbox/3.6/obt/prop.h",
+          "sha256": "c42a2607e55cd50cfa024ad5210bd6f67b10d38b9362b2297b6f983ec6bbe270"
+        },
+        {
+          "path": "usr/include/openbox/3.6/obt/signal.h",
+          "sha256": "a5514312d2d99b968f782683988be0f6268b25b82b41bd01ebf3a728d6252945"
+        },
+        {
+          "path": "usr/include/openbox/3.6/obt/util.h",
+          "sha256": "f2e5d3667d9d02fdbfdc8f07ec75ef7a7d3974495ef6ce0be2d85ec2abf9aea0"
+        },
+        {
+          "path": "usr/include/openbox/3.6/obt/version.h",
+          "sha256": "cb6dfefa204c6f046c3590bc4c6f4d301ea190ebee25ff4c0de87c7236f01c98"
+        },
+        {
+          "path": "usr/include/openbox/3.6/obt/xml.h",
+          "sha256": "f0339996813dd1b875fe85ca341f5071216a7cf736b7b914c62e176924b8b66c"
+        },
+        {
+          "path": "usr/include/openbox/3.6/obt/xqueue.h",
+          "sha256": "a691e0fb0996a2aa6aa4045c187b31c587567b9b9d88af8b2a9b54fd64f2b09b"
+        },
+        {
+          "path": "usr/lib/libobrender.so",
+          "sha256": "b9f40ce8ed096d2663c3cc6409c06ad8f3910851ed2ae33c56077ede9b5929b1"
+        },
+        {
+          "path": "usr/lib/libobrender.so.32",
+          "sha256": "b9f40ce8ed096d2663c3cc6409c06ad8f3910851ed2ae33c56077ede9b5929b1"
+        },
+        {
+          "path": "usr/lib/libobrender.so.32.0.0",
+          "sha256": "b9f40ce8ed096d2663c3cc6409c06ad8f3910851ed2ae33c56077ede9b5929b1"
+        },
+        {
+          "path": "usr/lib/libobt.so",
+          "sha256": "5025abf8c2d502ccc88459ff1bfa91be03b3c42661bbe979e29ec6e68d6f5b93"
+        },
+        {
+          "path": "usr/lib/libobt.so.2",
+          "sha256": "5025abf8c2d502ccc88459ff1bfa91be03b3c42661bbe979e29ec6e68d6f5b93"
+        },
+        {
+          "path": "usr/lib/libobt.so.2.0.2",
+          "sha256": "5025abf8c2d502ccc88459ff1bfa91be03b3c42661bbe979e29ec6e68d6f5b93"
+        },
+        {
+          "path": "usr/lib/openbox/openbox-autostart",
+          "sha256": "17b5cea0a1d7620bf53e50bdff013c19db59af9e7903e244c162b12f229b4eb9"
+        },
+        {
+          "path": "usr/lib/openbox/openbox-xdg-autostart",
+          "sha256": "5ee664b71f41561cd166f150e9b3559169f6dd19f95b66645e39b79c5eb94b82"
+        },
+        {
+          "path": "usr/lib/pkgconfig/obrender-3.5.pc",
+          "sha256": "7ad2ea7ff04f5c805fe2c002ded59a36694bf4b4bbf065376bf87b6b6ffd3cae"
+        },
+        {
+          "path": "usr/lib/pkgconfig/obt-3.5.pc",
+          "sha256": "96ee1654713b7d44e85a5b9376930b9b03b5a050167207c820a17e8bb3f2a1e0"
+        },
+        {
+          "path": "usr/share/applications/openbox.desktop",
+          "sha256": "bb83f065b86c7eedbded7cf2e583b94b270798c0791eeafc1290d514b9570605"
+        },
+        {
+          "path": "usr/share/doc/openbox/AUTHORS",
+          "sha256": "a120394776d374c6a7ce95d28b40b80fc9d1b7de1822927ece21432993d7fd2c"
+        },
+        {
+          "path": "usr/share/doc/openbox/CHANGELOG",
+          "sha256": "929a5f550bcf25f87a56c191898f1e1e782070d0e5c856d56ca9b294152de9b6"
+        },
+        {
+          "path": "usr/share/doc/openbox/COMPLIANCE",
+          "sha256": "f8e35c69f2a9b41be66beb29bc7d5891282557674a3eb8eba45bb67ac963905d"
+        },
+        {
+          "path": "usr/share/doc/openbox/COPYING",
+          "sha256": "32b1062f7da84967e7019d01ab805935caa7ab7321a7ced0e30ebe75e5df1670"
+        },
+        {
+          "path": "usr/share/doc/openbox/README",
+          "sha256": "b5281a92ec3afcd1ac8e501ddaa7e2a41309cd33b59fb82cdca357f60ecd4d5c"
+        },
+        {
+          "path": "usr/share/doc/openbox/menu.xsd",
+          "sha256": "7d0f05d510757df6e4bdaa4ce062c12012b52ce48e25029e11b6e0a234896381"
+        },
+        {
+          "path": "usr/share/doc/openbox/rc-mouse-focus.xml",
+          "sha256": "576005abb726f03ec8c90f6740062b903e1889b10174ae84d8e67121bb85da9a"
+        },
+        {
+          "path": "usr/share/doc/openbox/rc.xsd",
+          "sha256": "3881b965d8a475fa1e5b1c233159881a20a33a56c51963fa2aed227a4a138fa4"
+        },
+        {
+          "path": "usr/share/doc/openbox/xbm/bullet.xbm",
+          "sha256": "8900815d81e68c00b4c75b10dd1f2715ef42a3a355e69a722f4cee5b81be7323"
+        },
+        {
+          "path": "usr/share/doc/openbox/xbm/close.xbm",
+          "sha256": "462c681553358aaccee6d0000e41211f9f719df5042d3867f6728f726500917c"
+        },
+        {
+          "path": "usr/share/doc/openbox/xbm/desk.xbm",
+          "sha256": "335eee7f6e5cf2919d1b8d564510717ef8b03ba6f10de5063c3ac78c9186f121"
+        },
+        {
+          "path": "usr/share/doc/openbox/xbm/desk_toggled.xbm",
+          "sha256": "0ee0120ca5cddad48f0bbfff445559d38da5d7191c6d6daa910e525a181195b0"
+        },
+        {
+          "path": "usr/share/doc/openbox/xbm/iconify.xbm",
+          "sha256": "d2b5e1b76c1da6dc2abfb923701f3cd377164d98087a9894b9ac3dfde6e3ef99"
+        },
+        {
+          "path": "usr/share/doc/openbox/xbm/max.xbm",
+          "sha256": "81a4f0587ed633677dced88de060edbd1829b5e2db97dbf399cfc18e3512dc76"
+        },
+        {
+          "path": "usr/share/doc/openbox/xbm/max_toggled.xbm",
+          "sha256": "f1d4edb1de6b78b5080e1bb9159da09c03b3f3383dbdbd7a83ff03161767dea2"
+        },
+        {
+          "path": "usr/share/doc/openbox/xbm/shade.xbm",
+          "sha256": "1a78177ea72d809fdc930cc0386436fdaa486995d77b13d3e42ba1a929a38498"
+        },
+        {
+          "path": "usr/share/doc/openbox/xbm/shade_toggled.xbm",
+          "sha256": "1a78177ea72d809fdc930cc0386436fdaa486995d77b13d3e42ba1a929a38498"
+        },
+        {
+          "path": "usr/share/locale/af/LC_MESSAGES/openbox.mo",
+          "sha256": "438adcf8afa4dcaf5069330f2f3b8bb4d30806724bbeb7b09be6228345d10e9b"
+        },
+        {
+          "path": "usr/share/locale/ar/LC_MESSAGES/openbox.mo",
+          "sha256": "7dcb5aed1cb97ada3ff0ed381be091e6004f35ea2fc24bf217ea4914dced84b1"
+        },
+        {
+          "path": "usr/share/locale/be/LC_MESSAGES/openbox.mo",
+          "sha256": "a808e619db4c0d1eb78b5b755dd8a758cd0b76884896d97d3d711c345b9cf35f"
+        },
+        {
+          "path": "usr/share/locale/bn_IN/LC_MESSAGES/openbox.mo",
+          "sha256": "fc1547a10b6ee61e011c4d6b89b1fbfe3f22eae3ff6f132cf4d5e5b6a8d7abba"
+        },
+        {
+          "path": "usr/share/locale/ca/LC_MESSAGES/openbox.mo",
+          "sha256": "85aed754c46fb9f97cf6e477a662cf802334a7d00b3718eec6179d94b8eaf15b"
+        },
+        {
+          "path": "usr/share/locale/cs/LC_MESSAGES/openbox.mo",
+          "sha256": "3002baa0f2adcb810ff4420c267adf9120aa7e7aef33e40428d5ab9d58881128"
+        },
+        {
+          "path": "usr/share/locale/da/LC_MESSAGES/openbox.mo",
+          "sha256": "2b22fe75e55a9b9be9f00591ac5ff595b615f89c11c11cedc7ac8740dd7a76c7"
+        },
+        {
+          "path": "usr/share/locale/de/LC_MESSAGES/openbox.mo",
+          "sha256": "7213fbcc1987b457415b87f555d145a85f3397a4e02fcc66d1189cc19aaeb259"
+        },
+        {
+          "path": "usr/share/locale/en@boldquot/LC_MESSAGES/openbox.mo",
+          "sha256": "b9d31c5633f8b130f5a20b244f9f0f6fa9fab1071978b045976083644dd6549b"
+        },
+        {
+          "path": "usr/share/locale/en@quot/LC_MESSAGES/openbox.mo",
+          "sha256": "866a6d49484cab1c12bcd1a0dc7caf5046273c1643244160f996f30f4b4bf37f"
+        },
+        {
+          "path": "usr/share/locale/es/LC_MESSAGES/openbox.mo",
+          "sha256": "ac24b6741ea7c7df46acd997899c77b40b0981470a1ce6bc4ca5715991ef9479"
+        },
+        {
+          "path": "usr/share/locale/et/LC_MESSAGES/openbox.mo",
+          "sha256": "d2b8e391703253b73cd5569cb432f7b2c616575626d9a12ed801e2cdffa4df15"
+        },
+        {
+          "path": "usr/share/locale/eu/LC_MESSAGES/openbox.mo",
+          "sha256": "2b21519616571a81589c9b8c0e65885e463bdfe05f1790e5bf81110e3d93680b"
+        },
+        {
+          "path": "usr/share/locale/fi/LC_MESSAGES/openbox.mo",
+          "sha256": "53bc9d101760ac45b9ea23796aa658f0af3a3a5b0dbce9a1e7be650d7437181a"
+        },
+        {
+          "path": "usr/share/locale/fr/LC_MESSAGES/openbox.mo",
+          "sha256": "23fb0614da5283a004f50f1719eb7b0de6c3442469a3199f0c8a79487d58c5ca"
+        },
+        {
+          "path": "usr/share/locale/gl_ES/LC_MESSAGES/openbox.mo",
+          "sha256": "c3795bac52402548ce39b5b7395d7e03251f0ed81bfbad26b1e2a28602d19dda"
+        },
+        {
+          "path": "usr/share/locale/he/LC_MESSAGES/openbox.mo",
+          "sha256": "2d85e75a6244a19f3321e239d6723ed7c37240beb8dfbc11ffa7079e37c8fc48"
+        },
+        {
+          "path": "usr/share/locale/hr/LC_MESSAGES/openbox.mo",
+          "sha256": "90e13005702cd8bccfee9196464c526f023120bbc84217177c8245a575615e99"
+        },
+        {
+          "path": "usr/share/locale/hu/LC_MESSAGES/openbox.mo",
+          "sha256": "f6a180c5ef43f065dc1469fe1f1af41fb4a57086d0ac7aad4efa1ed8148fa3c8"
+        },
+        {
+          "path": "usr/share/locale/ia/LC_MESSAGES/openbox.mo",
+          "sha256": "45052cbedd321b83c8807cb60272936c062d694d93a7a833baa5430e6a89ec4e"
+        },
+        {
+          "path": "usr/share/locale/it/LC_MESSAGES/openbox.mo",
+          "sha256": "03d7d86f137d626040ca8736ab1243beedb90dd6d786325ef37e650f2214d2f2"
+        },
+        {
+          "path": "usr/share/locale/ja/LC_MESSAGES/openbox.mo",
+          "sha256": "e210a31bc5409844dbaed3a04f9f6a97721bcb629f1cc6171f9d066ee877e0d8"
+        },
+        {
+          "path": "usr/share/locale/lt/LC_MESSAGES/openbox.mo",
+          "sha256": "5ddca94056b9f06ff373a8cfa47ae1e942896a6b16b6734e540fb0ec48867f96"
+        },
+        {
+          "path": "usr/share/locale/lv/LC_MESSAGES/openbox.mo",
+          "sha256": "1381bbb83b940c2ad3b82127dd4cb5eeb38ba90f6c341fb7db2a929d652c140c"
+        },
+        {
+          "path": "usr/share/locale/nl/LC_MESSAGES/openbox.mo",
+          "sha256": "5d7266b70d7275a167acb033d9b38fbe049d877685cb7e97028bf91ae09e9d60"
+        },
+        {
+          "path": "usr/share/locale/no/LC_MESSAGES/openbox.mo",
+          "sha256": "ca60b203cf71dddf356c573d44b13bbc955c3fe3fab1be70c44a59e54599d6b5"
+        },
+        {
+          "path": "usr/share/locale/pl/LC_MESSAGES/openbox.mo",
+          "sha256": "01c0d64f7c6bd1be4bc0db400d41ec956d96d84e3616ab41afbce93852baebcd"
+        },
+        {
+          "path": "usr/share/locale/pt/LC_MESSAGES/openbox.mo",
+          "sha256": "c3d6035aaf460d057cc31850a3e1c614d0fb41307f7af24c2fbc8b0a0f6ad477"
+        },
+        {
+          "path": "usr/share/locale/pt_BR/LC_MESSAGES/openbox.mo",
+          "sha256": "dd0044fff5cfcd35478bf930e591d7d2021193afa2f6c93dd99860bc863f6af6"
+        },
+        {
+          "path": "usr/share/locale/ro/LC_MESSAGES/openbox.mo",
+          "sha256": "96a014c4567351b076f2879d43f16bc3b87ed721cce7565e8e770fb69fc42ff7"
+        },
+        {
+          "path": "usr/share/locale/ru/LC_MESSAGES/openbox.mo",
+          "sha256": "0f722401de07f660c2f4ed584744de3fe8cca1203b0f194f8afe26559396e4cf"
+        },
+        {
+          "path": "usr/share/locale/sk/LC_MESSAGES/openbox.mo",
+          "sha256": "8f87958d98ef602225804f0b2ad07ecdf58de4d15eac8315ecd3da95da92ff46"
+        },
+        {
+          "path": "usr/share/locale/sr/LC_MESSAGES/openbox.mo",
+          "sha256": "2d20855504eb32f9015e5d68f403948116b50ca41827454b91eb293e27ac8159"
+        },
+        {
+          "path": "usr/share/locale/sr@latin/LC_MESSAGES/openbox.mo",
+          "sha256": "44fed51433ed2480eac90c9e58a9a181dd34080969473ca3fcb9b41194c35ea9"
+        },
+        {
+          "path": "usr/share/locale/sv/LC_MESSAGES/openbox.mo",
+          "sha256": "b8ce72973c3fedd7e5738629ed3463195e1912a33d381db963b7cb3f8e19ec7e"
+        },
+        {
+          "path": "usr/share/locale/tr/LC_MESSAGES/openbox.mo",
+          "sha256": "e5cae73e7a51818b758020d692f6f7172edcb94203cdbe30a6eb5f487285b021"
+        },
+        {
+          "path": "usr/share/locale/uk/LC_MESSAGES/openbox.mo",
+          "sha256": "668a579f3a03ae8357fc715ebac4f7425f064779629f38555adb083e7a3cb777"
+        },
+        {
+          "path": "usr/share/locale/vi/LC_MESSAGES/openbox.mo",
+          "sha256": "17fe1f431998a23bb8bc2b737203f4fbed2d55ccc45b6d83092f1b3fb8e24588"
+        },
+        {
+          "path": "usr/share/locale/zh_CN/LC_MESSAGES/openbox.mo",
+          "sha256": "642060ce4f93a0f2d65aaa7af5e4a37a238015128bd57323db95b5991cfc0d2e"
+        },
+        {
+          "path": "usr/share/locale/zh_TW/LC_MESSAGES/openbox.mo",
+          "sha256": "03ae38c01ff4888288f21eb218ffda175dd414ddc5110a2bdc48f001973edcae"
+        },
+        {
+          "path": "usr/share/man/man1/obxprop.1.gz",
+          "sha256": "218baf941aee5bea17747c54a9c45b1ad119d0fb0ab8ee535ad6bd639ea7742f"
+        },
+        {
+          "path": "usr/share/man/man1/openbox-session.1.gz",
+          "sha256": "9dd6ed8548ce68ece82947c7608b7d73c30ae0a59af81bca205e8419b11ed2f1"
+        },
+        {
+          "path": "usr/share/man/man1/openbox.1.gz",
+          "sha256": "d59297708110026df408062390c6196a904cccf0c5aa1464e3f06399c0700bb8"
+        },
+        {
+          "path": "usr/share/pixmaps/openbox.png",
+          "sha256": "ce4ea3391ee1554c69d72baedb995f14223b3611f5dc5695e3778508bf8035a7"
+        },
+        {
+          "path": "usr/share/themes/Artwiz-boxed/openbox-3/themerc",
+          "sha256": "2a55b382a0ac6f9cd275b237a8eca436a826219ffc600a09aec2e6b70d635555"
+        },
+        {
+          "path": "usr/share/themes/Bear2/openbox-3/close.xbm",
+          "sha256": "7b233ddb175dd55e224c26fb58c5be7d44e7490110ebe1e763eb3c40698d95e4"
+        },
+        {
+          "path": "usr/share/themes/Bear2/openbox-3/close_pressed.xbm",
+          "sha256": "1f461f71451d2e36c89341d852d9b06c0a54bc66a6da1e6b6521d3adb7f0e25a"
+        },
+        {
+          "path": "usr/share/themes/Bear2/openbox-3/desk.xbm",
+          "sha256": "fc29fe254839db22d84ee78842aa2fba44e834d07fbd365c0b7a7d657e5d8fac"
+        },
+        {
+          "path": "usr/share/themes/Bear2/openbox-3/desk_toggled.xbm",
+          "sha256": "b558d876f62244898d55d80ed340714ba91c878e95bba5d2005d215151f99184"
+        },
+        {
+          "path": "usr/share/themes/Bear2/openbox-3/iconify.xbm",
+          "sha256": "567c7f82cf7e18354f9563c44774a0dcc957e6b90e80ca975f9f85e9ae4da9bd"
+        },
+        {
+          "path": "usr/share/themes/Bear2/openbox-3/iconify_pressed.xbm",
+          "sha256": "6513a48290c99e286230e0130d2d16cd64357f65756f139d069922e429b25dee"
+        },
+        {
+          "path": "usr/share/themes/Bear2/openbox-3/max.xbm",
+          "sha256": "aad1659436c641108ca4855cfc3705583adc2c43f339c3a3679341766abe70b0"
+        },
+        {
+          "path": "usr/share/themes/Bear2/openbox-3/max_pressed.xbm",
+          "sha256": "1bce19c2a1b4682c6e5dd201f17a2454f131bf535730ede94eca7d0f7d15e16a"
+        },
+        {
+          "path": "usr/share/themes/Bear2/openbox-3/max_toggled.xbm",
+          "sha256": "549da0fdfded82032ee26df7b3fe8078ccfa37641af4edb12a2605fa3415baae"
+        },
+        {
+          "path": "usr/share/themes/Bear2/openbox-3/shade.xbm",
+          "sha256": "adc6403064ee6fb8fc263e2391b2c7846a86b4df7244ee440348a7afebd0630c"
+        },
+        {
+          "path": "usr/share/themes/Bear2/openbox-3/shade_pressed.xbm",
+          "sha256": "22b96c06378fbeb8ae8ab751008b1b79fbb7cf1c0a873077d7bc1bf2c775c63c"
+        },
+        {
+          "path": "usr/share/themes/Bear2/openbox-3/themerc",
+          "sha256": "601d060a8a9c7df6523472fc1633d459c1d5a77254d69a165259b34799efeba6"
+        },
+        {
+          "path": "usr/share/themes/Clearlooks-3.4/openbox-3/themerc",
+          "sha256": "1319f14b4bf7a64d7b4ec38340a007c77ba809e55b0ba6fcd71891107d1a620f"
+        },
+        {
+          "path": "usr/share/themes/Clearlooks-Olive/openbox-3/themerc",
+          "sha256": "f6eba84d48f309a8c3a6964f7106672df9d73da9c7a4a7719447e6ceda3f56db"
+        },
+        {
+          "path": "usr/share/themes/Clearlooks/openbox-3/themerc",
+          "sha256": "bdbb6bbb28890cd6c22bee46de7801184ca8b601b2010e3e8d20adea7924ee4a"
+        },
+        {
+          "path": "usr/share/themes/Mikachu/openbox-3/bullet.xbm",
+          "sha256": "8900815d81e68c00b4c75b10dd1f2715ef42a3a355e69a722f4cee5b81be7323"
+        },
+        {
+          "path": "usr/share/themes/Mikachu/openbox-3/close.xbm",
+          "sha256": "1802cce243157634d0a272b93e03dc2351fe5bfc267707595f1f3b7c2f52c4a7"
+        },
+        {
+          "path": "usr/share/themes/Mikachu/openbox-3/desk.xbm",
+          "sha256": "29a6173b75deb81da04cebbeaa4f17b13758c14d1d43cd0b7c715630cb1da535"
+        },
+        {
+          "path": "usr/share/themes/Mikachu/openbox-3/iconify.xbm",
+          "sha256": "b5b63bf743deddb67b4f36235d56072f95a7913d70ad563631352479f3a20e94"
+        },
+        {
+          "path": "usr/share/themes/Mikachu/openbox-3/max.xbm",
+          "sha256": "33b36f52212c69a0d3058961370cfdb4aeeefdc3734ca4dea06f797f6f6e1f8d"
+        },
+        {
+          "path": "usr/share/themes/Mikachu/openbox-3/themerc",
+          "sha256": "f97dc595438538f37ff1fdc982f6199c6c067d6a06c8e3adf487cbaa7b14108e"
+        },
+        {
+          "path": "usr/share/themes/Natura/openbox-3/close.xbm",
+          "sha256": "7b233ddb175dd55e224c26fb58c5be7d44e7490110ebe1e763eb3c40698d95e4"
+        },
+        {
+          "path": "usr/share/themes/Natura/openbox-3/close_hover.xbm",
+          "sha256": "db7a0db2545a9f7e16b44c7a20d6d9d603e3ebec0f12164d0c37e88c71e07aea"
+        },
+        {
+          "path": "usr/share/themes/Natura/openbox-3/desk.xbm",
+          "sha256": "ebc1469739dbc32814f660ed3c9e825270e90986ed9fb5d02f694ded2e73311f"
+        },
+        {
+          "path": "usr/share/themes/Natura/openbox-3/desk_hover.xbm",
+          "sha256": "39e646f6d74175e7ef8a51f865bfe9dc7dcf03bf83284d7073beb6b2aa6a16f2"
+        },
+        {
+          "path": "usr/share/themes/Natura/openbox-3/desk_toggled.xbm",
+          "sha256": "b558d876f62244898d55d80ed340714ba91c878e95bba5d2005d215151f99184"
+        },
+        {
+          "path": "usr/share/themes/Natura/openbox-3/iconify.xbm",
+          "sha256": "7f86e125732e414c184da6fedadea79ced65b5ad5f9b26636cd1b3fc3a506f20"
+        },
+        {
+          "path": "usr/share/themes/Natura/openbox-3/iconify_hover.xbm",
+          "sha256": "45905c803d968d291015f0b95c05c39b2958d3e975ec42fdc3d5b1b423d7804c"
+        },
+        {
+          "path": "usr/share/themes/Natura/openbox-3/max.xbm",
+          "sha256": "aad1659436c641108ca4855cfc3705583adc2c43f339c3a3679341766abe70b0"
+        },
+        {
+          "path": "usr/share/themes/Natura/openbox-3/max_hover.xbm",
+          "sha256": "e3c78f556f0415a1e0445d79a691b9eb7bee392871af35dba85f0db40cc686a9"
+        },
+        {
+          "path": "usr/share/themes/Natura/openbox-3/max_toggled.xbm",
+          "sha256": "549da0fdfded82032ee26df7b3fe8078ccfa37641af4edb12a2605fa3415baae"
+        },
+        {
+          "path": "usr/share/themes/Natura/openbox-3/shade.xbm",
+          "sha256": "ab6a93ab62fea487d8942a229bbca7d42e670b04fd2b85bcfaa8dedf598ec895"
+        },
+        {
+          "path": "usr/share/themes/Natura/openbox-3/shade_hover.xbm",
+          "sha256": "e70731210d7936043e24b7b74d5194c9e311accd95aad7046a3acc8d394c0ade"
+        },
+        {
+          "path": "usr/share/themes/Natura/openbox-3/themerc",
+          "sha256": "d66afe2e6e63100aba49e7b341cd21c706d8ed5555559cdf41da5719f549b082"
+        },
+        {
+          "path": "usr/share/themes/Onyx-Citrus/openbox-3/themerc",
+          "sha256": "49b46d17a9f7a8367b569397df1af4afc32613862e8e5415761442e2cc240ab9"
+        },
+        {
+          "path": "usr/share/themes/Onyx/openbox-3/themerc",
+          "sha256": "471a23e8c38367056be815cd20624c506b934aebbc35a49ea86e2effcd5ab553"
+        },
+        {
+          "path": "usr/share/themes/Orang/openbox-3/themerc",
+          "sha256": "43fe40888ffb2f8a2713cd7ea7b25692c782efc5c558bbaec57d0c6e28b89df8"
+        },
+        {
+          "path": "usr/share/themes/Syscrash/openbox-3/max.xbm",
+          "sha256": "f1d4edb1de6b78b5080e1bb9159da09c03b3f3383dbdbd7a83ff03161767dea2"
+        },
+        {
+          "path": "usr/share/themes/Syscrash/openbox-3/max_disabled.xbm",
+          "sha256": "81a4f0587ed633677dced88de060edbd1829b5e2db97dbf399cfc18e3512dc76"
+        },
+        {
+          "path": "usr/share/themes/Syscrash/openbox-3/max_pressed.xbm",
+          "sha256": "81a4f0587ed633677dced88de060edbd1829b5e2db97dbf399cfc18e3512dc76"
+        },
+        {
+          "path": "usr/share/themes/Syscrash/openbox-3/max_toggled.xbm",
+          "sha256": "c4d0ce10be992d9d71bbb2fd246d880f8b351ac666db5bcebff5df713895e67a"
+        },
+        {
+          "path": "usr/share/themes/Syscrash/openbox-3/themerc",
+          "sha256": "b8edda23cdb2dc59df9350a5ee4253a7c3edafb9622fb9f8d2daa708700c1e87"
+        },
+        {
+          "path": "usr/share/xsessions/openbox.desktop",
+          "sha256": "3f7576f85a00f2243a3c3874d62d782ee434b7875c662876076cfd36b362c8f4"
+        }
+      ],
+      "mismatched": []
+    },
+    {
+      "metadata": {
+        "pkgname": [
+          "imlib2"
+        ],
+        "pkgver": [
+          "1.12.7-3"
+        ],
+        "url": [
+          "https://sourceforge.net/projects/enlightenment/"
+        ],
+        "arch": [
+          "aarch64"
+        ],
+        "license": [
+          "BSD"
+        ]
+      },
+      "archive": "imlib2-1.12.7-3-aarch64.pkg.tar.xz",
+      "archive_sha256": "784bff6c65825acf9c23419636e4d5da38508e86bf4add3434992062d0e1b1e2",
+      "matched": [
+        {
+          "path": "usr/bin/imlib2_bumpmap",
+          "sha256": "5b9bb7c64a3df31e6c0b2722b3f5528d9666da68d528a42819ca78596dc614a3"
+        },
+        {
+          "path": "usr/bin/imlib2_colorspace",
+          "sha256": "75a1a27ee21a1e5c2d5a2c033c6ccca1252c3e6d87c65ae4b4a1b905296efa2b"
+        },
+        {
+          "path": "usr/bin/imlib2_conv",
+          "sha256": "09bff2cef0cbad50e997ca2c63ad24f7e1912561c96937f33d75861058c1467d"
+        },
+        {
+          "path": "usr/bin/imlib2_grab",
+          "sha256": "ba8d983753f4a0bafddc05bb1513c028be5f708f3f2a4cd9e730529ed4cea300"
+        },
+        {
+          "path": "usr/bin/imlib2_load",
+          "sha256": "e895f955fb23039d8dacc5bc0c92a6291d99018169a471a9873dc720b8c21e8e"
+        },
+        {
+          "path": "usr/bin/imlib2_poly",
+          "sha256": "27b0ecd5acbf4adcc43582e16aea3059bbe7b0919d41d7b8c061d37664e1c4fc"
+        },
+        {
+          "path": "usr/bin/imlib2_show",
+          "sha256": "260ca66f3ad5a7c0e54c5c9e1547c2052bc9f8689a68e5bcfeb7b2aabba729f3"
+        },
+        {
+          "path": "usr/bin/imlib2_test",
+          "sha256": "ca0662133681aca6babd13f6e141005e90bb674d78855dc49201333a6f49b75b"
+        },
+        {
+          "path": "usr/bin/imlib2_view",
+          "sha256": "f1fce6c92bd98f3f18ac14302215403fd2cbdc1596dcf3373924d11ae1a16629"
+        },
+        {
+          "path": "usr/include/Imlib2.h",
+          "sha256": "785f4241ffdd2c89c2d64c42769b7f9f53f37ee65fb0995b870382158c0ceaf1"
+        },
+        {
+          "path": "usr/include/Imlib2_Loader.h",
+          "sha256": "86143dd79f3e0073ac3688e8e00a18392fb98c9538d1caa1dafffea08475c173"
+        },
+        {
+          "path": "usr/lib/imlib2/filters/bumpmap.so",
+          "sha256": "496c6c9539e5cac5a54699355d990ee5dc65c2b8f261f9c82dc53a05dcf4a137"
+        },
+        {
+          "path": "usr/lib/imlib2/filters/colormod.so",
+          "sha256": "4b087424f8421b1948a9335c63c932507d348a4c244e01733423da4ef177ec67"
+        },
+        {
+          "path": "usr/lib/imlib2/filters/testfilter.so",
+          "sha256": "22fa010f2598a4769d07e7afd7b00e4208fd3cf1c8177f3a808abc6045f75b55"
+        },
+        {
+          "path": "usr/lib/imlib2/loaders/ani.so",
+          "sha256": "da6602b90efb2e4f664e9cda2041c72466b3ef7e9e7c8b8558bae6c17c647179"
+        },
+        {
+          "path": "usr/lib/imlib2/loaders/argb.so",
+          "sha256": "98a8d34c667010304b259b74bc552a289abeb24a85dd029c7ea9c6f2dd089893"
+        },
+        {
+          "path": "usr/lib/imlib2/loaders/bmp.so",
+          "sha256": "c061f22d2033b264f132d89b78dd6c0dddc753f2416cd59f98ceaf4cc1d8c3cc"
+        },
+        {
+          "path": "usr/lib/imlib2/loaders/bz2.so",
+          "sha256": "903801251f22ec35a3dce534631c8c3ef130844652e502fe17ff5217ea63ec41"
+        },
+        {
+          "path": "usr/lib/imlib2/loaders/ff.so",
+          "sha256": "e50fe3a44cf8f5ee3eb0fde9bfa92397745f2e41e6e1613c497f951d8c37cc72"
+        },
+        {
+          "path": "usr/lib/imlib2/loaders/gif.so",
+          "sha256": "712ea4bbd38bb3714a2efcd324b066ebb9af82e04b97c80b71d60000d6281a85"
+        },
+        {
+          "path": "usr/lib/imlib2/loaders/heif.so",
+          "sha256": "d4438135ca43849c87e98764b059cb7782557946738d8f2e2591cb84b7abbc96"
+        },
+        {
+          "path": "usr/lib/imlib2/loaders/ico.so",
+          "sha256": "4d4a777273c9c8db8feabdfcfdcc99775983654f14479cd87a7d64321faa0963"
+        },
+        {
+          "path": "usr/lib/imlib2/loaders/id3.so",
+          "sha256": "d6acf32003ba02ee56362f7c6324dbfe7583b0c545039d6b433aa4e8cc58f41e"
+        },
+        {
+          "path": "usr/lib/imlib2/loaders/j2k.so",
+          "sha256": "e6d5b137981511f12c3a79d9e027ff43a8d7f0140e921c67d2a72d42e1677fe0"
+        },
+        {
+          "path": "usr/lib/imlib2/loaders/jpeg.so",
+          "sha256": "60a73c5f5b9777eb1572024b409528d4ed69301106afe65466ec32a099d27cfd"
+        },
+        {
+          "path": "usr/lib/imlib2/loaders/jxl.so",
+          "sha256": "d22423180a681343fa84b518d81562fea84bef6cfe46b19c21e698c099d415e4"
+        },
+        {
+          "path": "usr/lib/imlib2/loaders/lbm.so",
+          "sha256": "b0d47e329daeaae7c1397665fa98b9f38fdb7a850bcc0b20744ea182b5493288"
+        },
+        {
+          "path": "usr/lib/imlib2/loaders/lzma.so",
+          "sha256": "725aacab6e45476970c35229526faf218b81971a344855e6c586bdad1332894b"
+        },
+        {
+          "path": "usr/lib/imlib2/loaders/png.so",
+          "sha256": "69f8173b633bac42e35c12cda91e67b8dd8913532f9ef55caf56261751667c2b"
+        },
+        {
+          "path": "usr/lib/imlib2/loaders/pnm.so",
+          "sha256": "75476b20903d834c0532cd71d35d87dc0fba01f9ae4055bd2332007b0d20ea1d"
+        },
+        {
+          "path": "usr/lib/imlib2/loaders/ps.so",
+          "sha256": "792419f6766233d7d1704772a00ea1b9d17613b1978003299443d0d6b1b62688"
+        },
+        {
+          "path": "usr/lib/imlib2/loaders/qoi.so",
+          "sha256": "a5e404e519221bec6382c2958b3bb271089a7520cbf0280a500dacb35e655320"
+        },
+        {
+          "path": "usr/lib/imlib2/loaders/svg.so",
+          "sha256": "07486723678aed796c851c1b6f263f1e618860d8c44c7ef7a6293ab1697c56e8"
+        },
+        {
+          "path": "usr/lib/imlib2/loaders/tga.so",
+          "sha256": "92af4ea47af9644514a08f80de58fc3c3cb98a7474242632608961dd24477b77"
+        },
+        {
+          "path": "usr/lib/imlib2/loaders/tiff.so",
+          "sha256": "cf60f2b55f3515745d7aa8f77db808ce54cdf985511c7b2004e12f006c94c836"
+        },
+        {
+          "path": "usr/lib/imlib2/loaders/webp.so",
+          "sha256": "e4dab889543ad3639dc23951db59eaf2f0747f5ee4b2e9a452d6a2a911449e5f"
+        },
+        {
+          "path": "usr/lib/imlib2/loaders/xbm.so",
+          "sha256": "a9da92762351302493d423514fde823be3959a0f4420310cf766ee5180e09a51"
+        },
+        {
+          "path": "usr/lib/imlib2/loaders/xpm.so",
+          "sha256": "a1448419de7eee9b280cec60b132163463fdeef6ab7e4143a85f23d4a5a2215f"
+        },
+        {
+          "path": "usr/lib/imlib2/loaders/zlib.so",
+          "sha256": "20949896bbfbd16da05afa378944dede572eafc0853e94bfd822363234561517"
+        },
+        {
+          "path": "usr/lib/libImlib2.so.1",
+          "sha256": "a63c76d903915bfbf4f45bb203e78e1a22ddec04d2624d1116e7b8d8af45f5b6"
+        },
+        {
+          "path": "usr/lib/libImlib2.so.1.12.7",
+          "sha256": "a63c76d903915bfbf4f45bb203e78e1a22ddec04d2624d1116e7b8d8af45f5b6"
+        },
+        {
+          "path": "usr/lib/pkgconfig/imlib2.pc",
+          "sha256": "38201f5d488daf1207cac77efe95c8c63acb7289b1843d69767fa67141075e13"
+        },
+        {
+          "path": "usr/share/imlib2/data/fonts/cinema.ttf",
+          "sha256": "118a1b7a8715b9907e30e64a5fce0a3d21b73df3394939039b62445217bce54d"
+        },
+        {
+          "path": "usr/share/imlib2/data/fonts/grunge.ttf",
+          "sha256": "db000ffe3a6796ab697752d914fe7d9b3698e49219100592a391ea0812e9ad92"
+        },
+        {
+          "path": "usr/share/imlib2/data/fonts/morpheus.ttf",
+          "sha256": "0081bb4271b791ae923afe397427742d85d502edea3636bafb5476511b9fd4f9"
+        },
+        {
+          "path": "usr/share/imlib2/data/fonts/notepad.ttf",
+          "sha256": "d5b21382acec0717360b93ae9a97b379f17950776baf6a8293e84435cd659e36"
+        },
+        {
+          "path": "usr/share/imlib2/data/images/audio.png",
+          "sha256": "927626f8bf0319f371a56b519f445d21e0ed263cb091461332e21defc2371dd1"
+        },
+        {
+          "path": "usr/share/imlib2/data/images/bg.png",
+          "sha256": "d18ea06b9dc92992837e7c038f3089ab40408e46380777122d8b4b3531f10dbb"
+        },
+        {
+          "path": "usr/share/imlib2/data/images/bulb.png",
+          "sha256": "a57c89a4c7ce42d03d39dc8b18547582ec189e3a3ca924eff46368b5293479c2"
+        },
+        {
+          "path": "usr/share/imlib2/data/images/cal.png",
+          "sha256": "1946663928263e358397908730468f401278226467d21659c891f9645e942feb"
+        },
+        {
+          "path": "usr/share/imlib2/data/images/calc.png",
+          "sha256": "05a4c6c8cd1308154bffb840a9f24356d8a32a3f485ecd649d2cf5910e977ec6"
+        },
+        {
+          "path": "usr/share/imlib2/data/images/folder.png",
+          "sha256": "5f76b652342bb8d88f2fbdb02ce979e510c33cb36ca851e5f47cad074c7d3070"
+        },
+        {
+          "path": "usr/share/imlib2/data/images/globe.png",
+          "sha256": "bde131b74d1772bc10bed3a34a90a2fc9514c15d4f2ba67ec009f1e8296d927b"
+        },
+        {
+          "path": "usr/share/imlib2/data/images/imlib2.png",
+          "sha256": "fbf428673fea611c4dd83b9acc4287e455d1ad04d811abc411fc763364af785f"
+        },
+        {
+          "path": "usr/share/imlib2/data/images/lock.png",
+          "sha256": "027740794846f72c2370edcf6b398502dc6c18c9a8334c651f307db77a8edb96"
+        },
+        {
+          "path": "usr/share/imlib2/data/images/mail.png",
+          "sha256": "1e1d6c275cc22353c78a42a3bad488c434cd6dd8d0fdfa5935be36f41b8c6974"
+        },
+        {
+          "path": "usr/share/imlib2/data/images/menu.png",
+          "sha256": "c44f2136f4284332559c0af5b2558557ebc542c5d01c564636b87bff41c4425a"
+        },
+        {
+          "path": "usr/share/imlib2/data/images/mush.png",
+          "sha256": "b157d41d059ea1c4c22b6d6bfef25252f939898151e8632fcf8f24b6d6b78bd5"
+        },
+        {
+          "path": "usr/share/imlib2/data/images/paper.png",
+          "sha256": "18b547bdbc822bb12563688165aade0ce6204c24b809589913b7a1b01b14d061"
+        },
+        {
+          "path": "usr/share/imlib2/data/images/sh1.png",
+          "sha256": "16838316bf52fc1060b6ec75b637ad437f21328411144f85f0084ae314ee9e12"
+        },
+        {
+          "path": "usr/share/imlib2/data/images/sh2.png",
+          "sha256": "6b30aa1d3151e50e149a7f20e00035599f64afd6e91097ccfde7976901824213"
+        },
+        {
+          "path": "usr/share/imlib2/data/images/sh3.png",
+          "sha256": "13817389071090ee0bd444a82b9772e5270f45d403fd0990f224e4feca1435eb"
+        },
+        {
+          "path": "usr/share/imlib2/data/images/stop.png",
+          "sha256": "79beb64d99bb88687fe31fbbb3a9bf2dcadb23a0c424e6b9cedc3505d9d09d66"
+        },
+        {
+          "path": "usr/share/imlib2/data/images/tnt.png",
+          "sha256": "e373fa837b573e659c1b39d2b36557dd9ac08afd3dd789d9c688a908a06a38a1"
+        },
+        {
+          "path": "usr/share/imlib2/rgb.txt",
+          "sha256": "3ab43100fec61f86ae6b7abebbf62fda355dff88c7ec9f0eed332520ddbb7965"
+        },
+        {
+          "path": "usr/share/licenses/imlib2/COPYING",
+          "sha256": "fb70339dd33a77b6213c7ae067fccf93d04af44ff3f937c61f8863f7970e73f6"
+        }
+      ],
+      "mismatched": []
+    },
+    {
+      "metadata": {
+        "pkgname": [
+          "xcb-util"
+        ],
+        "pkgver": [
+          "0.4.1-2"
+        ],
+        "url": [
+          "https://xcb.freedesktop.org"
+        ],
+        "arch": [
+          "aarch64"
+        ],
+        "license": [
+          "X11-distribute-modifications-variant"
+        ]
+      },
+      "archive": "xcb-util-0.4.1-2-aarch64.pkg.tar.xz",
+      "archive_sha256": "acf6f8f974bb4c5aa982eb8e9f7e988704807b3db9d747ce98f6ca1ffaa17b5f",
+      "matched": [
+        {
+          "path": "usr/include/xcb/xcb_atom.h",
+          "sha256": "668135ed7ed0da0e87f4bc97320bc6a0cdbe42bbca41bd81f623ac539c8de609"
+        },
+        {
+          "path": "usr/include/xcb/xcb_aux.h",
+          "sha256": "8e174c39d5dcc7ccb7b6e38938a37897746666ceb8ab7df89a71b8bcb942025f"
+        },
+        {
+          "path": "usr/include/xcb/xcb_event.h",
+          "sha256": "a29545f9f254904e4623b622d08f10a2950940344694e7e9fdbd85b5bed88503"
+        },
+        {
+          "path": "usr/include/xcb/xcb_util.h",
+          "sha256": "d9ada3243b135069328498f049983a300598129b6312963c051b7ea8eb9f0b46"
+        },
+        {
+          "path": "usr/lib/libxcb-util.so.1",
+          "sha256": "80100bf01813da9cea1262e1f767e8ab98f3399bc3db7e90402adacbb1d76a2a"
+        },
+        {
+          "path": "usr/lib/libxcb-util.so.1.0.0",
+          "sha256": "80100bf01813da9cea1262e1f767e8ab98f3399bc3db7e90402adacbb1d76a2a"
+        },
+        {
+          "path": "usr/lib/pkgconfig/xcb-atom.pc",
+          "sha256": "8bbe4166f7b580d401a7711b30833ddad17f0fa115eb5821764ee6ab0fec2968"
+        },
+        {
+          "path": "usr/lib/pkgconfig/xcb-aux.pc",
+          "sha256": "f03e2b1a4d6c7035a1b6e2e26550f2c7014b56f2539325419881ae144778e4a9"
+        },
+        {
+          "path": "usr/lib/pkgconfig/xcb-event.pc",
+          "sha256": "51a2950af52966f8f4a301a754efbd3605476e4ceb5c621f59f314c9a9de916b"
+        },
+        {
+          "path": "usr/lib/pkgconfig/xcb-util.pc",
+          "sha256": "7d6a29df89feddee1fbf2840c765284978cadd46875bee18649f48acc7419446"
+        },
+        {
+          "path": "usr/share/licenses/xcb-util/COPYING",
+          "sha256": "325b64f0b0284e08bbb7a78ae3e55c1edc2a7cd77f603225ae4b8ffc35423e37"
+        }
+      ],
+      "mismatched": []
+    }
+  ],
+  "upstream_sources": [
+    {
+      "name": "openbox",
+      "url": "https://openbox.org/dist/openbox/openbox-3.6.1.tar.gz",
+      "sha256": "8b4ac0760018c77c0044fab06a4f0c510ba87eae934d9983b10878483bde7ef7"
+    },
+    {
+      "name": "startup-notification",
+      "url": "https://www.freedesktop.org/software/startup-notification/releases/startup-notification-0.12.tar.gz",
+      "sha256": "3c391f7e930c583095045cd2d10eb73a64f085c7fde9d260f2652c7cb3cfbe4a"
+    }
+  ],
+  "matched_files": 230,
+  "unattributed_files": [],
+  "signature_reverified": false,
+  "corresponding_source_complete": false,
+  "scope": "Exact package byte attribution and notices, not full distribution compliance"
+}

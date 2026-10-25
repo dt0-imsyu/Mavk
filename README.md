@@ -1,6 +1,6 @@
 # Mavk
 
-Latest: [source-built DroidDeck APK and Muck pacing evidence](docs/SOURCE_APK_AND_MUCK_PACING_2026-10-25.md).
+Latest: [live Muck profiling, artifact rollback and limitations](docs/MUCK_GPU_PROFILE_AND_ARTIFACTS_2026-10-25.md).
 Developer prototype: [AHB/input results and remaining gates](docs/DEMO_PREPARATION_2026-10-25.md).
 
 Рабочее название независимого Vulkan runtime/backend для stock Android,
@@ -19,8 +19,8 @@ Vulkan ICD. Самостоятельный Android backend не равен Vulka
 
 ## Приоритет
 
-1. Общая совместимость: BC1–BC7, корректные null-ресурсы и требования DXVK.
-2. Настоящий D3D11-кадр через DXVK-Sarek в DroidDeck, затем реальные приложения.
+1. Игровой DroidDeck-прототип: FPS, артефакты, воспроизводимые игровые проверки.
+2. Общая совместимость по реальным требованиям приложений, без фиктивных features.
 3. Windows: постоянный IddCx и продуктовая интеграция workspace в U-AVF.
 4. Дальнейший Windows GPU/WDDM R&D и Ubuntu Vulkan, сохраняя VirGL/OpenGL.
 
@@ -32,18 +32,32 @@ Vulkan ICD. Самостоятельный Android backend не равен Vulka
 разработки, **не обещание паритета со Snapdragon/Turnip**. Сравнение возможно
 только на одинаковых играх, настройках и измерениях frame time.
 
-## Первый результат, который нужно получить
+## Проверенный игровой прототип
 
-Небольшой отдельный Android test harness в app sandbox:
+Steam → ARM64 Proton/Wine/FEX → экспериментальный DXVK-Sarek → Mavk
+Compatibility → libhybris → штатный Vulkan Mali. Для вывода используется
+необязательный XCB/Wayland AHB backend с acquire/release fences. RGBA передаётся
+напрямую; BGRA требует одного GPU blit, без CPU readback. SHM остаётся fallback.
+Общий Vulkan/Android код находится в `core/`, `compatibility/`, `adapters/android/`;
+интеграция launcher — в `adapters/droiddeck/`, WSI — в `third_party/wsi-layer/`.
+Исходный Android compositor и интерфейс выбора backend принадлежат отдельному
+DroidDeck-форку; Mavk не заменяет Steam/Proton или интерфейс DroidDeck.
 
-- инвентаризация реального Vulkan device/features/extensions;
-- аппаратный graphics + compute workload, проверяемое изображение/результат;
-- повторные allocate/submit/synchronize/free и lifecycle без утечек/ошибок;
-- CPU submit time, GPU time где поддерживается, p50/p95/p99 frame time,
-  память и накладные расходы относительно прямого вызова Android Vulkan.
+| Проверка на Tab S11 / Mali-G925 | Фактический результат |
+|---|---|
+| Native graphics/compute и ограниченный Windows ICD | PASS, см. ссылки ниже |
+| AMD64 Wine D3D11, AHB, ResizeBuffers1920→1280→1920 | PASS, CoreZero/gaps0 |
+| Native D3D11 через fallback SHM | Видимый поток,598 copied buffers/10с |
+| Muck, движущееся меню | ~34–35 отображённых buffers/с, AHB/copy0 |
+| Muck, одна тяжёлая игровая сцена | ~9.1 buffers/с при1600p и1200p |
+| Half-Life2 | Не установлена; игровой тест не выполнен |
+| DDNet | Текущий Linux/FEX startup blocker до Vulkan; не игровой PASS |
 
-Не начинать с полного Vulkan command-remoting или WDDM-драйвера. Сначала
-доказать этот небольшой native milestone и составить capability matrix.
+Buffers/с — измерение SurfaceFlinger и compositor, а не доказательство60
+уникальных игровых кадров. Повторяющиеся чёрные диагональные артефакты остаются
+открытой проблемой; экспериментальная CSE-оптимизация откачена. Измерения на
+нагретом устройстве нельзя сравнивать с холодными без учёта thermal state.
+Полная поддержка upstream DXVK и Vulkan CTS/conformance не заявляется.
 
 План и критерии: [docs/ROADMAP.md](docs/ROADMAP.md).
 Текущее состояние: [docs/STATE.md](docs/STATE.md).
@@ -54,10 +68,11 @@ Vulkan ICD. Самостоятельный Android backend не равен Vulka
   private Binder и замены системного crosvm/vendor-драйвера.
 - U-AVF Ubuntu/P7, Windows 8 CPU/storage/firmware и рабочий H.264 path сохраняются.
 - Не объявлять unsupported Vulkan feature поддерживаемой ради запуска приложения.
-- Никаких commit/push/publication. Эта папка ещё не отдельный Git-репозиторий;
-  публичный репозиторий пользователь создаст позже.
-- Лицензия/зависимости/права проверяются до публикации. Новая лицензия здесь
-  пока не назначается; сторонний код не становится собственным кодом Mavk.
+- Локальные коммиты разрешены; push и публикация без разрешения запрещены.
+- Лицензии: [LICENSE](LICENSE), [сторонние компоненты](THIRD_PARTY_NOTICES.md).
+  Собственный код Apache2, кроме индивидуально отмеченных файлов; WSI MIT,
+  производный Proton wrapper GPLv3. Сторонний код сохраняет свою лицензию.
+  Полнота corresponding-source комплекта runtime пока не подтверждена.
 
 На 2026-10-15 native compute и graphics работают на аппаратном G925.
 Простой Surface workload подтверждён независимыми presentation timestamps

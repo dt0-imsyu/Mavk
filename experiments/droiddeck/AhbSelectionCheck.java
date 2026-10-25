@@ -12,11 +12,15 @@ import java.util.ArrayList;
 /** Policy checks, optionally followed by a normal native session without Steam. */
 public final class AhbSelectionCheck extends Instrumentation {
     private boolean normal;
+    private boolean shm;
     private String architecture = "aarch64";
     private String expectedLibraryHash = "99a12d70e88e14babcf27ad8dcb22804334a9e769bce2dcc89c7c5646096e663";
     @Override public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
         normal = arguments != null && "1".equals(arguments.getString("normal"));
+        String route = arguments == null ? "ahb" : arguments.getString("route", "ahb");
+        require(route.equals("ahb") || route.equals("shm"), "explicit presentation route");
+        shm = route.equals("shm");
         if (arguments != null) architecture = arguments.getString("arch", "aarch64");
         if (arguments != null) expectedLibraryHash = arguments.getString("wsiSha256", expectedLibraryHash);
         require(expectedLibraryHash.matches("[0-9a-f]{64}"), "explicit WSI pin");
@@ -79,6 +83,7 @@ public final class AhbSelectionCheck extends Instrumentation {
             configure.invoke(policy, context, env);
             require(env.contains("DROIDDECK_MAVK_PRESENTATION=x11-shm"), "failed preparation stays SHM");
             if (normal) {
+                selectAhb.invoke(policy, context, !shm);
                 File work = new File(context.getFilesDir(), "mavk-selection-normal");
                 File done = new File(work, "done");
                 require(new File(work, "run.sh").isFile() && !done.exists(), "fresh normal-session fixture");
@@ -95,14 +100,14 @@ public final class AhbSelectionCheck extends Instrumentation {
                 require(done.isFile(), "normal session did not complete in 90s");
                 require(Files.readString(done.toPath()).trim().equals("0"), "normal-session native consumer failed");
                 String log = Files.readString(new File(work, "result.log").toPath());
-                require(log.contains("NORMAL_SESSION_AHB_READY") && log.contains("NORMAL_SESSION_D3D11_DONE") &&
-                    log.contains("NORMAL_SESSION_POLICY_PASS helpers=2 ahb=1 shm=0 protonExecuted=0") &&
-                    log.contains("MAVK_AHB_REQUEST flags=0") && log.contains("MAVK_WSI_AHB_IMPORT result=0") &&
+                require(log.contains(shm ? "NORMAL_SESSION_SHM_READY" : "NORMAL_SESSION_AHB_READY") && log.contains("NORMAL_SESSION_D3D11_DONE") &&
+                    log.contains(shm ? "NORMAL_SESSION_POLICY_PASS helpers=2 ahb=0 shm=1 protonExecuted=0" : "NORMAL_SESSION_POLICY_PASS helpers=2 ahb=1 shm=0 protonExecuted=0") &&
+                    (shm ? !log.contains("MAVK_WSI_AHB_IMPORT") : log.contains("MAVK_AHB_REQUEST flags=0") && log.contains("MAVK_WSI_AHB_IMPORT result=0")) &&
                     log.contains("MAVK_LAYER_CORE_END liveZero=1") &&
                     log.contains("WINDOW_DEVICE_HRESULT=0x00000000") && log.contains("WINDOW_STREAM_END"), "normal-session AHB D3D11 receipts");
             }
             result.putString("stream", "APP_AHB_SELECTION_PASS realRuntime=1 ahb=1 shm=1 invalidGeometryFallback=1 steamStarted=0\n");
-            if (normal) result.putString("stream", result.getString("stream") + "NORMAL_SESSION_D3D11_PASS steamStarted=0\n");
+            if (normal) result.putString("stream", result.getString("stream") + "NORMAL_SESSION_D3D11_PASS route=" + (shm ? "shm" : "ahb") + " steamStarted=0\n");
         } catch (Throwable error) {
             status = 0;
             result.putString("stream", "APP_AHB_SELECTION_FAIL " + android.util.Log.getStackTraceString(error));

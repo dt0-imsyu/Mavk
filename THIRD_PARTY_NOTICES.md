@@ -49,6 +49,12 @@ relicensed as Mavk. No Adreno implementation is imported.
 
 ## Private DroidDeck integration package (2026-10-19)
 
+The2026-10-25 package attribution identifies230 exact unchanged runtime files
+from Openbox3.6.1-14, startup-notification0.12-9, Imlib2 1.12.7-3 and
+xcb-util0.4.1-2 (Arch Linux ARM). Additional upstream COPYING/AUTHORS texts and
+source/archive hashes are retained in `third_party/runtime-notices`. This
+completes that narrow byte-attribution check, not corresponding-source compliance.
+
 `adapters/droiddeck/run-proton.py` derives from DroidDeck's
 `tools/hybris/run-proton.py` (base0916a538aff4c08f799a4bd9fa17dd3c98b01e99).
 It remains under the upstream GNU GPL version3, not the root Apache license;

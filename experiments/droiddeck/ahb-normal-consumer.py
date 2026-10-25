@@ -21,11 +21,18 @@ assert callable(components['apply']), 'bundled component helper missing'
 env['STEAM_COMPAT_DATA_PATH'] = '/tmp/mavk-prepare-only/42'
 placeholder = ['/mavk-prepare-only/proton', 'waitforexitandrun', '/mavk-prepare-only/game.exe']
 _, selected = module['system_graphics_launch'](placeholder, env)
-for key in ('MAVK_WSI_AHB_ALLOC_ONLY', 'MAVK_WSI_AHB_PRESENT', 'MAVK_WSI_XCB_AHB_PROXY', 'MAVK_WSI_AHB_BGRA_BLIT'):
-    assert selected[key] == '1', key
-assert 'WSI_X11_FORCE_SHM' not in selected
-assert selected['VK_LAYER_PATH'].split(':')[0] == env['DROIDDECK_MAVK_XCB_AHB_WSI']
-print('NORMAL_SESSION_POLICY_PASS helpers=2 ahb=1 shm=0 protonExecuted=0', flush=True)
+ahb_keys = ('MAVK_WSI_AHB_ALLOC_ONLY', 'MAVK_WSI_AHB_PRESENT', 'MAVK_WSI_XCB_AHB_PROXY', 'MAVK_WSI_AHB_BGRA_BLIT')
+if env['DROIDDECK_MAVK_PRESENTATION'] == 'ahb-bgra':
+    for key in ahb_keys:
+        assert selected[key] == '1', key
+    assert 'WSI_X11_FORCE_SHM' not in selected
+    assert selected['VK_LAYER_PATH'].split(':')[0] == env['DROIDDECK_MAVK_XCB_AHB_WSI']
+    print('NORMAL_SESSION_POLICY_PASS helpers=2 ahb=1 shm=0 protonExecuted=0', flush=True)
+else:
+    assert env['DROIDDECK_MAVK_PRESENTATION'] == 'x11-shm'
+    assert selected['WSI_X11_FORCE_SHM'] == '1'
+    assert not any(key in selected for key in ahb_keys)
+    print('NORMAL_SESSION_POLICY_PASS helpers=2 ahb=0 shm=1 protonExecuted=0', flush=True)
 # The native consumer has no Wine PE accesses; retain only inherited preloads.
 if env.get('LD_PRELOAD'):
     selected['LD_PRELOAD'] = env['LD_PRELOAD']

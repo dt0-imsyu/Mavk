@@ -1,5 +1,31 @@
 # Mavk checkpoint — 2026-10-23
 
+## LATEST — portable FEX boundary / APK checkpoint, 2026-10-25
+
+Installed source APK6c8680f5 (fex-boundary-demo), runtime3bd128 unchanged. Steam
+normal startup and Muck AHB menu smoke PASS/errors0, hot20.4buffers/s is not a
+performance A/B. Portable-FEX child environment fix advances native Linux DDNet
+past socket failure; even x86-64 true then fails in loader with sbrk()/exit127.
+No DDNet graphics claim; HL2 not installed.37 FEX +20 packaging tests PASS.
+Steam minimization lowers helper CPU to~2% total; menu~35/s, not60. Grass-disabled
+world still~13/s; saved checkbox restored, no valid geometry on/off A/B claim.
+Detailed follow-up in MUCK_GPU_PROFILE_AND_ARTIFACTS_2026-10-25.md and fork's
+docs/MAVK_NATIVE_FEX_2026-10-25.md. CSE/GPU probe off; artifact root cause OPEN.
+
+## LATEST — live Muck profiling / artifact rollback, 2026-10-25
+
+MUCK_GPU_PROFILE_AND_ARTIFACTS_2026-10-25.md supersedes Steam reservation below.
+Steam/game launch authorized. Installed notices APK443c300b/runtime3bd128,
+executable payload unchanged; source/legal completeness still open. Real same-view
+1600p/1200p AHB both9.1 displayed buffers/s; no resolution-only performance gain.
+GPU batch spans24.9/55.7ms, CPU not eight-core-saturated; no60FPS claim. GPU probe
+run showed black tiles with Mali errors; probe disabled. User recurrence
+also reported during actual CSE candidate with errors0. CSE/performance profile now
+RESTORED, normal metadataReadOnly0, three screenshots captured (two inspected clean).
+Not a permanent artifact fix. Thermal Status3/SKIN45C invalidates cold-vs-hot FPS
+comparisons. Muck quit for cooldown, Steam remains open. Next same-scene bounded
+artifact/performance localization or second available game. No push/production change.
+
 ## LATEST — source-built APK / Muck saved pacing, 2026-10-25
 
 SOURCE_APK_AND_MUCK_PACING_2026-10-25.md: actual Gradle APK675e9cb6 installed,

@@ -16,13 +16,18 @@ namespace mavk::compat {
 struct GuardCompilerStats {uint64_t compiled=0,hits=0;size_t entries=0,retainedBytes=0;};
 enum class GuardTarget {Vulkan11=0,Vulkan13=1,Vulkan12=2};
 struct DescriptorUse {uint32_t set,binding,variable;};
+struct SpecializationValue {uint32_t id;std::vector<uint8_t> bytes;};
+std::vector<uint32_t> specializeDescriptorShader(const std::vector<uint32_t>&,
+    const std::vector<SpecializationValue>&,GuardTarget,bool uniformLayout,bool scalarLayout);
 // Static use is defined by ID operands in the selected entry point's call tree,
 // not by declarations, interface lists, or specialization-dependent execution.
 std::vector<DescriptorUse> staticDescriptorUses(const std::vector<uint32_t>&,
     const std::string& entryPoint,uint32_t executionModel,GuardTarget target=GuardTarget::Vulkan11);
 std::vector<DescriptorUse> staticDescriptorUses(const std::vector<uint32_t>&,
     const std::string& entryPoint,uint32_t executionModel,GuardTarget target,bool uniformBufferStandardLayout);
-struct GuardCompilerOptions {uint32_t publicSetCount=1;GuardTarget target=GuardTarget::Vulkan11;bool reportErrors=true;bool texelFormatMetadata=false;bool uniformBufferStandardLayout=false;bool metadataReadOnly=false;bool optimizeMetadataReads=false;};
+std::vector<DescriptorUse> staticDescriptorUses(const std::vector<uint32_t>&,
+    const std::string& entryPoint,uint32_t executionModel,GuardTarget target,bool uniformBufferStandardLayout,bool scalarBlockLayout);
+struct GuardCompilerOptions {uint32_t publicSetCount=1;GuardTarget target=GuardTarget::Vulkan11;bool reportErrors=true;bool texelFormatMetadata=false;bool uniformBufferStandardLayout=false;bool metadataReadOnly=false;bool optimizeMetadataReads=false;bool scalarBlockLayout=false;};
 class GuardCompiler {
 public:
     using Words=std::vector<uint32_t>;
@@ -38,6 +43,7 @@ private:
     bool reportErrors_=true;
     bool texelFormatMetadata_=false;
     bool uniformBufferStandardLayout_=false;
+    bool scalarBlockLayout_=false;
     bool metadataReadOnly_=false;
     bool optimizeMetadataReads_=false;
     std::list<Entry> cache_;

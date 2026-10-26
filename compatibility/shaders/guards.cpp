@@ -125,7 +125,7 @@ public:
     }
 };
 }
-GuardCompiler::GuardCompiler(size_t entries,size_t bytes,GuardCompilerOptions options):maxEntries_(entries),maxBytes_(bytes),publicSets_(options.publicSetCount),target_(options.target),reportErrors_(options.reportErrors),texelFormatMetadata_(options.texelFormatMetadata),uniformBufferStandardLayout_(options.uniformBufferStandardLayout),metadataReadOnly_(options.metadataReadOnly),optimizeMetadataReads_(options.optimizeMetadataReads){
+GuardCompiler::GuardCompiler(size_t entries,size_t bytes,GuardCompilerOptions options):maxEntries_(entries),maxBytes_(bytes),publicSets_(options.publicSetCount),target_(options.target),reportErrors_(options.reportErrors),texelFormatMetadata_(options.texelFormatMetadata),uniformBufferStandardLayout_(options.uniformBufferStandardLayout),scalarBlockLayout_(options.scalarBlockLayout),metadataReadOnly_(options.metadataReadOnly),optimizeMetadataReads_(options.optimizeMetadataReads){
     if(!entries||entries>256||bytes<1024||bytes>64*1024*1024||!publicSets_||publicSets_>7)throw std::invalid_argument("guard cache/set limits");
     if(target_!=GuardTarget::Vulkan11&&target_!=GuardTarget::Vulkan12&&target_!=GuardTarget::Vulkan13)throw std::invalid_argument("unsupported guard target environment");
 }
@@ -145,7 +145,7 @@ std::shared_ptr<const GuardCompiler::Words> GuardCompiler::compile(const Words& 
     auto consumer=[&](spv_message_level_t,const char*,const spv_position_t&,const char* text){if(diagnostics.size()<4096)diagnostics.append(text,0,4096-diagnostics.size());};
     const auto environment=target_==GuardTarget::Vulkan13?SPV_ENV_VULKAN_1_3:target_==GuardTarget::Vulkan12?SPV_ENV_VULKAN_1_2:SPV_ENV_VULKAN_1_1;
     spvtools::SpirvTools validator(environment);validator.SetMessageConsumer(consumer);
-    spvtools::ValidatorOptions validation;validation.SetUniformBufferStandardLayout(uniformBufferStandardLayout_);
+    spvtools::ValidatorOptions validation;validation.SetUniformBufferStandardLayout(uniformBufferStandardLayout_);validation.SetScalarBlockLayout(scalarBlockLayout_);
     if(!validator.Validate(code.data(),code.size(),validation))throw std::invalid_argument("input SPIR-V invalid: "+diagnostics);
     spvtools::Optimizer optimizer(environment);optimizer.SetMessageConsumer(consumer);
     // The bindless pass reads direct binding decorations. Normalize valid

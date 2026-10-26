@@ -1,3 +1,4 @@
+#include <mavk/compat/shader_descriptors.hpp>
 #include <mavk/compat/shader_guards.hpp>
 #include <spirv-tools/libspirv.hpp>
 #include <iostream>
@@ -167,5 +168,85 @@ OpFunctionEnd
     check(functionCalls==0);
     check(optimized.compile(packedCode)==optimizedCode&&optimized.stats().hits==1);
     std::cout<<"GUARD_CSE_STRUCTURE baselineWords="<<readOnlyCode->size()<<" optimizedWords="<<optimizedCode->size()<<" functionCalls="<<functionCalls<<"\n";
+    // Legal scalar-layout push constants must not be rejected as std430.
+    auto scalarText=std::string(packed);
+    auto annotation=scalarText.find("OpDecorate");
+    scalarText.insert(annotation,"OpDecorate %ScalarPush Block\nOpMemberDecorate %ScalarPush 0 Offset 0\nOpMemberDecorate %ScalarPush 1 Offset 12\n");
+    auto function=scalarText.find("%main = OpFunction");
+    scalarText.insert(function,"%triple = OpTypeVector %uint 3\n%ScalarPush = OpTypeStruct %triple %triple\n%pushptr = OpTypePointer PushConstant %ScalarPush\n%pushvar = OpVariable %pushptr PushConstant\n");
+    std::vector<uint32_t> scalarCode;check(packedTools.Assemble(scalarText,&scalarCode));
+    reject([&]{staticDescriptorUses(scalarCode,"main",5,GuardTarget::Vulkan12,true,false);});
+    check(staticDescriptorUses(scalarCode,"main",5,GuardTarget::Vulkan12,true,true).size()==2);
+    packedOptions.optimizeMetadataReads=false;packedOptions.scalarBlockLayout=true;
+    GuardCompiler scalarCompiler(4,1024*1024,packedOptions);
+    auto scalarGuarded=scalarCompiler.compile(scalarCode);
+    packedValidation.SetScalarBlockLayout(true);
+    check(packedTools.Validate(scalarGuarded->data(),scalarGuarded->size(),packedValidation));
+    packedOptions.scalarBlockLayout=false;GuardCompiler noScalar(4,1024*1024,packedOptions);
+    reject([&]{noScalar.compile(scalarCode);});
+    const char* aliasText=R"(
+OpCapability Shader
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %main "main" %a %b %out
+OpExecutionMode %main LocalSize 1 1 1
+OpDecorate %choose SpecId 7
+OpDecorate %a DescriptorSet 0
+OpDecorate %a Binding 0
+OpDecorate %b DescriptorSet 0
+OpDecorate %b Binding 0
+OpDecorate %out DescriptorSet 0
+OpDecorate %out Binding 1
+OpDecorate %Result Block
+OpMemberDecorate %Result 0 Offset 0
+%void = OpTypeVoid
+%fn = OpTypeFunction %void
+%bool = OpTypeBool
+%uint = OpTypeInt 32 0
+%v2 = OpTypeVector %uint 2
+%v3 = OpTypeVector %uint 3
+%v4 = OpTypeVector %uint 4
+%zero = OpConstant %uint 0
+%c2 = OpConstantComposite %v2 %zero %zero
+%c3 = OpConstantComposite %v3 %zero %zero %zero
+%choose = OpSpecConstantFalse %bool
+%I2 = OpTypeImage %uint 2D 0 0 0 2 R32ui
+%I3 = OpTypeImage %uint 3D 0 0 0 2 R32ui
+%P2 = OpTypePointer UniformConstant %I2
+%P3 = OpTypePointer UniformConstant %I3
+%a = OpVariable %P2 UniformConstant
+%b = OpVariable %P3 UniformConstant
+%Result = OpTypeStruct %v4
+%PS = OpTypePointer StorageBuffer %Result
+%PV = OpTypePointer StorageBuffer %v4
+%out = OpVariable %PS StorageBuffer
+%main = OpFunction %void None %fn
+%entry = OpLabel
+OpSelectionMerge %merge None
+OpBranchConditional %choose %yes %no
+%yes = OpLabel
+%ia = OpLoad %I2 %a
+%ra = OpImageRead %v4 %ia %c2
+OpBranch %merge
+%no = OpLabel
+%ib = OpLoad %I3 %b
+%rb = OpImageRead %v4 %ib %c3
+OpBranch %merge
+%merge = OpLabel
+%r = OpPhi %v4 %ra %yes %rb %no
+%p = OpAccessChain %PV %out %zero
+OpStore %p %r
+OpReturn
+OpFunctionEnd
+)";
+    std::vector<uint32_t> aliases;check(packedTools.Assemble(aliasText,&aliases));
+    check(packedTools.Validate(aliases));
+    reject([&]{reflectColorImageTypes(aliases);});
+    auto defaultAlias=specializeDescriptorShader(aliases,{},GuardTarget::Vulkan12,false,false);
+    check(reflectColorImageTypes(defaultAlias).at({0,0}).viewType==VK_IMAGE_VIEW_TYPE_3D);
+    auto selectedAlias=specializeDescriptorShader(aliases,{{7,{1,0,0,0}},{999,{0}}},GuardTarget::Vulkan12,false,false);
+    check(reflectColorImageTypes(selectedAlias).at({0,0}).viewType==VK_IMAGE_VIEW_TYPE_2D);
+    check(staticDescriptorUses(selectedAlias,"main",5,GuardTarget::Vulkan12).size()==2);
+    reject([&]{specializeDescriptorShader(aliases,{{7,{1}}},GuardTarget::Vulkan12,false,false);});
+    reject([&]{specializeDescriptorShader(aliases,{{7,{1,0,0,0}},{7,{0,0,0,0}}},GuardTarget::Vulkan12,false,false);});
     std::cout<<"STATIC_USE_PASS checks="<<checks<<" rejections="<<rejections<<"\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

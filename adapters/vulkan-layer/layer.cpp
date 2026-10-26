@@ -22,6 +22,7 @@
 #include "shader_stage_chain.hpp"
 #include "descriptor_layout_shape.hpp"
 #include "uniform_metadata.hpp"
+#include "sync_trace.hpp"
 
 #define MAVK_EXPORT extern "C" __attribute__((visibility("default")))
 MAVK_EXPORT PFN_vkVoidFunction VKAPI_CALL mavkGetInstanceProcAddr(VkInstance,const char*);
@@ -84,8 +85,11 @@ uint64_t metadataWordCount(const PipelineSchema& schema,const std::set<std::pair
 struct PipelineShadow {
     std::shared_ptr<const PipelineSchema> schema;std::vector<std::shared_ptr<const GuardCompiler::Words>> shaders;
     std::shared_ptr<PipelineOwner> owner;std::shared_ptr<NativeDescriptorAdapter> descriptors;size_t bytes=0;
+    std::shared_ptr<PipelineOwner> nativeDiagnostic;
+    bool compute=false;
     TexelShaderFormats texelFormats;
     ColorImageShaderTypes imageFormats;
+    std::set<uint32_t> specializedStages;
     ImageShaderTypes imageTypes;
     std::array<bool,7> requiredSets{};
     std::set<std::pair<uint32_t,uint32_t>> requiredBindings;
@@ -117,6 +121,10 @@ struct Device {
     bool testSubmitRejected=false;
     VulkanDescriptorResources resources;std::unique_ptr<VulkanDescriptorUpdates> updates;
     std::shared_ptr<DescriptorMetadataArena> metadataArena;
+    std::unique_ptr<mavk::diagnostics::SyncTrace> syncTrace;
+    std::string nativeShaderABPath;bool nativeShaderActive=false;uint64_t nativeShaderPoll=0,nativeShaderVariants=0,profileNativeShaderDraws=0;
+    std::map<uint32_t,uint64_t> nativeShaderRejections;
+    uint64_t profileNativeShaderCompute=0;
     std::map<VkBuffer,std::shared_ptr<BufferOwner>> buffers;
     std::map<VkImage,Image> images;std::map<VkImageView,View> views;
     std::map<VkSampler,std::shared_ptr<SamplerOwner>> samplers;
@@ -143,6 +151,7 @@ struct Device {
     bool testTexelMetadata=false;uint32_t testTexelMetadataRecords=0;
     bool cullPipelines=false,nativeGeometry=false,nativeTessellation=false,nativeMultiview=false;
     bool uniformBufferStandardLayout=false;
+    bool scalarBlockLayout=false;
     bool metadataReadOnly=false,shareQuietLog=false,useMetadataArena=false,useUniformMetadata=false,useNativePublic=false;
     bool optimizeMetadataReads=false;
     size_t shaderCacheEntries=4,shaderCacheBytes=2*1024*1024;
@@ -226,6 +235,7 @@ VKAPI_ATTR VkResult VKAPI_CALL createDevice(VkPhysicalDevice gpu,const VkDeviceC
         const auto mode=std::getenv("MAVK_LAYER_GUARDS");state->guarded=mode&&std::strcmp(mode,"1")==0;
         const auto reports=std::getenv("MAVK_GUARD_REPORTS");state->guardReports=!(reports&&std::strcmp(reports,"0")==0);
         const auto profile=std::getenv("MAVK_LAYER_PROFILE");state->profile=profile&&std::strcmp(profile,"1")==0;
+        const auto traceArm=std::getenv("MAVK_SYNC_TRACE_ARM");if(state->profile&&traceArm&&std::strlen(traceArm)<1024)state->syncTrace=std::make_unique<mavk::diagnostics::SyncTrace>(traceArm);
         const auto quietLog=std::getenv("MAVK_SHARED_DIAGNOSTICS");state->shareQuietLog=quietLog&&std::strcmp(quietLog,"1")==0;
         if(state->shareQuietLog)std::fprintf(stderr,"MAVK_DIAGNOSTIC_STORAGE sharedReadOnly=%u\n",unsigned(!state->guardReports));
         const auto arena=std::getenv("MAVK_DESCRIPTOR_ARENA");state->useMetadataArena=arena&&std::strcmp(arena,"1")==0;
@@ -251,15 +261,28 @@ VKAPI_ATTR VkResult VKAPI_CALL createDevice(VkPhysicalDevice gpu,const VkDeviceC
         const VkPhysicalDeviceFeatures* enabled=ci->pEnabledFeatures;
         for(auto p=static_cast<const VkBaseInStructure*>(ci->pNext);p;p=p->pNext)if(p->sType==VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2)enabled=&reinterpret_cast<const VkPhysicalDeviceFeatures2*>(p)->features;
         if(enabled){state->fragmentStores=enabled->fragmentStoresAndAtomics;state->vertexStores=enabled->vertexPipelineStoresAndAtomics;}
+        bool robustImages=false;
+        for(auto p=static_cast<const VkBaseInStructure*>(ci->pNext);p;p=p->pNext){
+            if(p->sType==VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES)robustImages|=reinterpret_cast<const VkPhysicalDeviceVulkan13Features*>(p)->robustImageAccess;
+            if(p->sType==VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_ROBUSTNESS_FEATURES)robustImages|=reinterpret_cast<const VkPhysicalDeviceImageRobustnessFeatures*>(p)->robustImageAccess;
+        }
+        const auto shaderAB=std::getenv("MAVK_DIAGNOSTIC_NATIVE_SHADER_ARM");
+        if(shaderAB&&std::strlen(shaderAB)<1024){
+            const bool safe=state->guarded&&state->useNativePublic&&enabled&&enabled->robustBufferAccess&&robustImages;
+            if(safe)state->nativeShaderABPath=shaderAB;
+            std::fprintf(stderr,"MAVK_NATIVE_SHADER_AB available=%u robustBufferEnabled=%u robustImageEnabled=%u diagnosticOnly=1\n",unsigned(safe),unsigned(enabled&&enabled->robustBufferAccess),unsigned(robustImages));
+        }
         state->nativeGeometry=enabled&&enabled->geometryShader;
         state->nativeTessellation=enabled&&enabled->tessellationShader;
         for(auto p=static_cast<const VkBaseInStructure*>(ci->pNext);p;p=p->pNext){
             if(p->sType==VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES)state->uniformBufferStandardLayout|=reinterpret_cast<const VkPhysicalDeviceVulkan12Features*>(p)->uniformBufferStandardLayout;
+            if(p->sType==VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES)state->scalarBlockLayout|=reinterpret_cast<const VkPhysicalDeviceVulkan12Features*>(p)->scalarBlockLayout;
+            if(p->sType==VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES)state->scalarBlockLayout|=reinterpret_cast<const VkPhysicalDeviceScalarBlockLayoutFeatures*>(p)->scalarBlockLayout;
             if(p->sType==VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_UNIFORM_BUFFER_STANDARD_LAYOUT_FEATURES)state->uniformBufferStandardLayout|=reinterpret_cast<const VkPhysicalDeviceUniformBufferStandardLayoutFeatures*>(p)->uniformBufferStandardLayout;
             if(p->sType==VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES)state->nativeMultiview|=reinterpret_cast<const VkPhysicalDeviceVulkan11Features*>(p)->multiview;
             if(p->sType==VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES)state->nativeMultiview|=reinterpret_cast<const VkPhysicalDeviceMultiviewFeatures*>(p)->multiview;
         }
-        std::fprintf(stderr,"MAVK_LAYER_LAYOUT_POLICY uniformBufferStandardLayoutEnabled=%u\n",unsigned(state->uniformBufferStandardLayout));
+        std::fprintf(stderr,"MAVK_LAYER_LAYOUT_POLICY uniformBufferStandardLayoutEnabled=%u scalarBlockLayoutEnabled=%u\n",unsigned(state->uniformBufferStandardLayout),unsigned(state->scalarBlockLayout));
         if(state->cullPipelines)std::fprintf(stderr,"MAVK_LAYER_CULL_POLICY experimental=1 publicFeature=0 nativeGeometryEnabled=%u\n",unsigned(state->nativeGeometry));
         auto dispatch=mavk::VulkanDispatch::next(parent->handle,gipa,*out,gdpa);
         state->core=std::make_unique<mavk::DeviceContext>(gpu,*out,ci->pQueueCreateInfos[0].queueFamilyIndex,dispatch);
@@ -629,7 +652,7 @@ std::shared_ptr<const GuardCompiler::Words> pipelineStageWords(Device& state,con
 }
 std::shared_ptr<PipelineShadow> preparePipeline(Device& state,VkPipelineLayout layout,uint32_t count,const VkPipelineShaderStageCreateInfo* stages,bool preserveOriginals=false){
     auto schema=state.pipelineLayouts.find(layout);if(schema==state.pipelineLayouts.end()||!count||count>8||!stages)throw std::invalid_argument("untracked pipeline layout/stages");
-    auto shadow=std::make_shared<PipelineShadow>();shadow->schema=schema->second;
+    auto shadow=std::make_shared<PipelineShadow>();shadow->schema=schema->second;shadow->compute=count==1&&stages[0].stage==VK_SHADER_STAGE_COMPUTE_BIT;
     std::vector<std::shared_ptr<const GuardCompiler::Words>> originals;
     std::vector<bool> stageUses;
     std::vector<std::set<std::pair<uint32_t,uint32_t>>> stageBindings(count);
@@ -638,7 +661,27 @@ std::shared_ptr<PipelineShadow> preparePipeline(Device& state,VkPipelineLayout l
         uint32_t model;
         switch(stages[i].stage){case VK_SHADER_STAGE_VERTEX_BIT:model=0;break;case VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT:model=1;break;case VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT:model=2;break;case VK_SHADER_STAGE_GEOMETRY_BIT:model=3;break;case VK_SHADER_STAGE_FRAGMENT_BIT:model=4;break;case VK_SHADER_STAGE_COMPUTE_BIT:model=5;break;default:throw std::invalid_argument("unsupported static-use shader stage");}
         if(!stages[i].pName)throw std::invalid_argument("shader entry point missing");
-        auto source=pipelineStageWords(state,stages[i]);auto uses=staticDescriptorUses(*source,stages[i].pName,model,target,state.uniformBufferStandardLayout);
+        auto source=pipelineStageWords(state,stages[i]);
+        if(state.guarded&&!preserveOriginals){
+            bool alias=false;
+            try{(void)reflectColorImageTypes(*source);}catch(const std::invalid_argument& e){
+                if(std::strcmp(e.what(),"conflicting color image shapes"))throw;alias=true;
+            }
+            if(alias){
+                std::vector<SpecializationValue> values;const auto* spec=stages[i].pSpecializationInfo;
+                if(spec){
+                    if(spec->mapEntryCount>1024||spec->dataSize>65536||(spec->mapEntryCount&&!spec->pMapEntries)||(spec->dataSize&&!spec->pData))throw std::invalid_argument("specialization metadata budget");
+                    for(uint32_t j=0;j<spec->mapEntryCount;j++){
+                        const auto& e=spec->pMapEntries[j];if(e.offset>spec->dataSize||e.size>spec->dataSize-e.offset||e.size>8)throw std::invalid_argument("specialization entry range");
+                        SpecializationValue v{e.constantID,{}};v.bytes.resize(e.size);if(e.size)std::memcpy(v.bytes.data(),static_cast<const uint8_t*>(spec->pData)+e.offset,e.size);values.push_back(std::move(v));
+                    }
+                }
+                source=std::make_shared<const GuardCompiler::Words>(specializeDescriptorShader(*source,values,target,state.uniformBufferStandardLayout,state.scalarBlockLayout));
+                (void)reflectColorImageTypes(*source); // Unresolved live aliases still fail closed.
+                shadow->specializedStages.insert(i);
+            }
+        }
+        auto uses=staticDescriptorUses(*source,stages[i].pName,model,target,state.uniformBufferStandardLayout,state.scalarBlockLayout);
         for(const auto& use:uses){
             if(use.set>=schema->second->sets.size())throw std::invalid_argument("statically used set outside pipeline layout");
             if(schema->second->sets[use.set].deferred)throw std::invalid_argument("statically used extended descriptor schema unsupported");
@@ -668,6 +711,7 @@ std::shared_ptr<PipelineShadow> preparePipeline(Device& state,VkPipelineLayout l
             GuardCompilerOptions options{publicSets};options.reportErrors=reports;options.texelFormatMetadata=true;
             options.target=target;
             options.uniformBufferStandardLayout=state.uniformBufferStandardLayout;
+            options.scalarBlockLayout=state.scalarBlockLayout;
             options.metadataReadOnly=state.metadataReadOnly;
             options.optimizeMetadataReads=state.optimizeMetadataReads;
             compiler=state.compilers.emplace(key,std::make_unique<GuardCompiler>(state.shaderCacheEntries,state.shaderCacheBytes,options)).first;
@@ -677,7 +721,7 @@ std::shared_ptr<PipelineShadow> preparePipeline(Device& state,VkPipelineLayout l
         const auto shaderStart=state.shaderCacheProfile?std::chrono::steady_clock::now():std::chrono::steady_clock::time_point{};
         auto guarded=compiler->second->compile(*source);
         if(uniformWords)
-            guarded=std::make_shared<const GuardCompiler::Words>(uniformGuardMetadata(*guarded,publicSets,uniformWords,target,state.uniformBufferStandardLayout));
+            guarded=std::make_shared<const GuardCompiler::Words>(uniformGuardMetadata(*guarded,publicSets,uniformWords,target,state.uniformBufferStandardLayout,state.scalarBlockLayout));
         if(state.shaderCacheProfile){
             const auto after=compiler->second->stats();++state.shaderCalls;
             state.shaderCompiled+=after.compiled-shaderBefore.compiled;state.shaderHits+=after.hits-shaderBefore.hits;
@@ -728,6 +772,7 @@ std::shared_ptr<PipelineShadow> preparePipeline(Device& state,VkPipelineLayout l
 std::vector<VkPipelineShaderStageCreateInfo> instrumentStages(Device& state,const PipelineShadow& shadow,uint32_t count,const VkPipelineShaderStageCreateInfo* stages,std::vector<std::shared_ptr<ShaderOwner>>& temporary){
     std::vector<VkPipelineShaderStageCreateInfo> out(stages,stages+count);
     for(uint32_t i=0;i<count;i++){
+        if(shadow.specializedStages.count(i))out[i].pSpecializationInfo=nullptr;
         auto owner=std::make_shared<ShaderOwner>();owner->device=state.handle;owner->destroy=state.fn<PFN_vkDestroyShaderModule>("vkDestroyShaderModule");
         VkShaderModuleCreateInfo ci{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};ci.codeSize=shadow.shaders[i]->size()*4;ci.pCode=shadow.shaders[i]->data();
         descriptor_detail::check(state.fn<PFN_vkCreateShaderModule>("vkCreateShaderModule")(state.handle,&ci,nullptr,&owner->handle),"guarded shader module");owner->owns=true;out[i]=shaderStageWithModule(stages[i],owner->handle);temporary.push_back(std::move(owner));
@@ -739,6 +784,7 @@ void registerPipeline(Device& state,VkPipeline handle,std::shared_ptr<PipelineSh
     std::fprintf(stderr,"MAVK_LAYER_PIPELINE guards=%s stages=%zu publicSets=%zu\n",state.guarded?"native-instrumented":"compiled-only",shadow->shaders.size(),shadow->schema->sets.size());
 }
 #include "cull_pipelines.hpp"
+#include "native_shader_ab.hpp"
 VKAPI_ATTR VkResult VKAPI_CALL createGraphicsPipelines(VkDevice h,VkPipelineCache cache,uint32_t count,const VkGraphicsPipelineCreateInfo* ci,const VkAllocationCallbacks* alloc,VkPipeline* out){
     auto state=device(h);if(!state)return VK_ERROR_INITIALIZATION_FAILED;std::lock_guard lock(state->mutex);
     std::vector<VkGraphicsPipelineCreateInfo> native;std::vector<std::shared_ptr<PipelineShadow>> shadows;
@@ -758,7 +804,11 @@ VKAPI_ATTR VkResult VKAPI_CALL createGraphicsPipelines(VkDevice h,VkPipelineCach
         }
     }catch(const std::exception& e){state->gap("vkCreateGraphicsPipelines",e.what());for(uint32_t i=0;i<count;i++)out[i]=VK_NULL_HANDLE;return VK_ERROR_FEATURE_NOT_PRESENT;}
     auto result=state->fn<PFN_vkCreateGraphicsPipelines>("vkCreateGraphicsPipelines")(h,cache,count,state->guarded||state->cullPipelines?native.data():ci,alloc,out);
-    for(uint32_t i=0;i<count;i++)if(out[i])try{registerPipeline(*state,out[i],!shadows.empty()&&shadows[i]?shadows[i]:preparePipeline(*state,ci[i].layout,ci[i].stageCount,ci[i].pStages));}
+    for(uint32_t i=0;i<count;i++)if(out[i])try{
+        auto shadow=!shadows.empty()&&shadows[i]?shadows[i]:preparePipeline(*state,ci[i].layout,ci[i].stageCount,ci[i].pStages);registerPipeline(*state,out[i],shadow);
+        auto plain=ci[i];if(!linked.empty()&&!linked[i].stages.empty()){plain.stageCount=uint32_t(linked[i].stages.size());plain.pStages=linked[i].stages.data();}
+        prepareNativeShaderAB(*state,plain,shadow);
+    }
     catch(const std::exception& e){state->gap("vkCreateGraphicsPipelines",e.what());if(state->guarded||(!linked.empty()&&!linked[i].stages.empty())){state->fn<PFN_vkDestroyPipeline>("vkDestroyPipeline")(h,out[i],alloc);out[i]=VK_NULL_HANDLE;result=VK_ERROR_OUT_OF_HOST_MEMORY;}}
     return result;
 }
@@ -770,7 +820,7 @@ VKAPI_ATTR VkResult VKAPI_CALL createComputePipelines(VkDevice h,VkPipelineCache
         for(uint32_t i=0;i<count;i++){if(ci[i].flags&(VK_PIPELINE_CREATE_LIBRARY_BIT_KHR|VK_PIPELINE_CREATE_DERIVATIVE_BIT))throw std::invalid_argument("guarded pipeline derivatives unsupported");shadows[i]=preparePipeline(*state,ci[i].layout,1,&ci[i].stage);native[i].stage=instrumentStages(*state,*shadows[i],1,&ci[i].stage,temporary)[0];}
     }catch(const std::exception& e){state->gap("vkCreateComputePipelines",e.what());for(uint32_t i=0;i<count;i++)out[i]=VK_NULL_HANDLE;return VK_ERROR_FEATURE_NOT_PRESENT;}
     auto result=state->fn<PFN_vkCreateComputePipelines>("vkCreateComputePipelines")(h,cache,count,state->guarded?native.data():ci,alloc,out);
-    for(uint32_t i=0;i<count;i++)if(out[i])try{registerPipeline(*state,out[i],state->guarded?shadows[i]:preparePipeline(*state,ci[i].layout,1,&ci[i].stage));}
+    for(uint32_t i=0;i<count;i++)if(out[i])try{auto shadow=state->guarded?shadows[i]:preparePipeline(*state,ci[i].layout,1,&ci[i].stage);registerPipeline(*state,out[i],shadow);prepareNativeComputeAB(*state,ci[i],shadow);}
     catch(const std::exception& e){state->gap("vkCreateComputePipelines",e.what());if(state->guarded){state->fn<PFN_vkDestroyPipeline>("vkDestroyPipeline")(h,out[i],alloc);out[i]=VK_NULL_HANDLE;result=VK_ERROR_OUT_OF_HOST_MEMORY;}}
     return result;
 }
@@ -815,6 +865,7 @@ PFN_vkVoidFunction deviceHook(const char* n){
     MATCH("vkQueueSubmit",queueSubmit);MATCH("vkQueueSubmit2",queueSubmit2);MATCH("vkQueueSubmit2KHR",queueSubmit2KHR);
     MATCH("vkQueuePresentKHR",profilePresent);MATCH("vkWaitForFences",profileWaitForFences);
     MATCH("vkWaitSemaphores",profileWaitSemaphores);MATCH("vkWaitSemaphoresKHR",profileWaitSemaphoresKHR);
+    MATCH("vkSignalSemaphore",profileSignalSemaphore);MATCH("vkSignalSemaphoreKHR",profileSignalSemaphoreKHR);
 #undef MATCH
     return nullptr;
 }

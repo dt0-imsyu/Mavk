@@ -8,7 +8,8 @@ out=${MAVK_FRONTEND_OUTPUT:?Fresh frontend output required}
 test ! -e "$out" || exit 20
 mkdir -p "$out"
 export LD_LIBRARY_PATH="$tools/usr/lib/x86_64-linux-gnu"
-export TMPDIR=/mnt/e/Mavk/artifacts/build-temp-20261018
+export TMPDIR=${MAVK_BUILD_TEMP:-/mnt/c/Users/denis/MainProjects/win11ontab/Mavk/artifacts-local/build-temp}
+mkdir -p "$TMPDIR"
 probe_flags=
 if test "${MAVK_TEST_TEXEL_COMPONENT_PROBE:-0}" = 1; then probe_flags=-DMAVK_TEST_TEXEL_COMPONENT_PROBE; fi
 for unit in guards static_use; do
@@ -18,7 +19,7 @@ for unit in guards static_use; do
 done
 "$tools/usr/bin/aarch64-linux-gnu-ar" rcs "$out/libmavk-shader-guards.a" "$out/guards.o" "$out/static_use.o"
 "$tools/usr/bin/aarch64-linux-gnu-g++" --sysroot="$tools" -std=c++17 -O2 \
- -I "$repo/compatibility/include" -I "$spirv/include" \
+ -I "$repo/compatibility/include" -I /mnt/e/Mavk/artifacts/sarek-native-source-20261018/source/include/vulkan/include -I "$spirv/include" \
  "$repo/compatibility/test/static-use.cpp" "$out/libmavk-shader-guards.a" \
  "$pinned/spirv-tools/source/opt/libSPIRV-Tools-opt.a" "$pinned/spirv-tools/source/libSPIRV-Tools.a" \
  -o "$out/static-use-test"

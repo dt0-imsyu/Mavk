@@ -7,7 +7,7 @@ import sys
 
 base = Path('/data/user/0/com.droiddeck.launcher.mavk/files')
 name = sys.argv[1] if len(sys.argv)>1 else 'mavk-shared-diagnostics'
-assert name in ('mavk-shared-diagnostics', 'mavk-descriptor-arena', 'mavk-uniform-packed', 'mavk-uniform-packed2', 'mavk-native-public', 'mavk-native-public2', 'mavk-native-public4')
+assert name in ('mavk-shared-diagnostics', 'mavk-descriptor-arena', 'mavk-uniform-packed', 'mavk-uniform-packed2', 'mavk-native-public', 'mavk-native-public2', 'mavk-native-public4', 'mavk-sync-causality', 'mavk-native-shader-ab', 'mavk-native-shader-final', 'mavk-specialized-shaders')
 layer = base / name
 fixture = base / 'mavk-aggregate'
 selected = base / 'mavk-selected'
@@ -38,13 +38,19 @@ for shared in (0, 1):
         env.pop('LD_PRELOAD', None)
         env.update(VK_LAYER_PATH=str(layer) + ':' + env['DROIDDECK_MAVK_RUNTIME'] + '/payload',
                    VK_INSTANCE_LAYERS='VK_LAYER_MAVK_compat:VK_LAYER_HYBRIS_compat',
-                   MAVK_LAYER_GUARDS='1', MAVK_LAYER_PROFILE='0', MAVK_LAYER_TRACE='0',
+                   MAVK_LAYER_GUARDS='1', MAVK_LAYER_PROFILE='1' if name=='mavk-sync-causality' or name.startswith('mavk-native-shader-') else '0', MAVK_LAYER_TRACE='0',
                    MAVK_GPU_PROBE='0', MAVK_GUARD_CSE='0', MAVK_METADATA_READ_ONLY='0',
                    MAVK_GUARD_REPORTS=str(reports), MAVK_SHARED_DIAGNOSTICS=str(shared),
                    MAVK_DESCRIPTOR_ARENA='0' if name=='mavk-shared-diagnostics' else '1',
                    MAVK_UNIFORM_GUARD_METADATA='1' if name.startswith('mavk-uniform-packed') else '0',
-                   MAVK_NATIVE_BOUND_SETS='1' if name.startswith('mavk-native-public') else '0',
+                   MAVK_NATIVE_BOUND_SETS='1' if name.startswith('mavk-native-public') or name=='mavk-sync-causality' or name.startswith('mavk-native-shader-') else '0',
                    MAVK_EXPECT_LAYER_PATH=str(layer / 'libVkLayer_mavk_compat.so'))
+        if name=='mavk-sync-causality' or name.startswith('mavk-native-shader-'):
+            (layer / 'sync-arm').write_text('oracle\n')
+            env['MAVK_SYNC_TRACE_ARM'] = str(layer / 'sync-arm')
+        if name.startswith('mavk-native-shader-'):
+            (layer / 'shader-arm').write_text('1\n')
+            env['MAVK_DIAGNOSTIC_NATIVE_SHADER_ARM'] = str(layer / 'shader-arm')
         result = subprocess.run([str(fixture / 'consumer'), str(fixture / 'nested.spv'),
                                  str(selected / 'triangle.vert.spv'),
                                  str(selected / 'triangle.frag.spv'), '--nested'],
@@ -54,6 +60,8 @@ for shared in (0, 1):
         assert result.returncode == 0, result.stderr[-2000:]
         assert b'NESTED_BUFFER_GPU_PASS' in result.stdout, result.stdout[-2000:]
         assert b'MAVK_LAYER_CORE_END liveZero=1' in result.stderr, result.stderr[-2000:]
+        if name.startswith('mavk-native-shader-'):
+            assert b'MAVK_NATIVE_SHADER_AB available=0 robustBufferEnabled=0 robustImageEnabled=0' in result.stderr
         print(f'SHARED_DIAGNOSTICS_GPU_PASS shared={shared} reports={reports}', flush=True)
 if name != 'mavk-shared-diagnostics':
     prefix = layer / 'gpu-arena-retention'

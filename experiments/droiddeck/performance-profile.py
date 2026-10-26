@@ -13,6 +13,8 @@ parser.add_argument('--shared-diagnostics', action='store_true', help='Reuse zer
 parser.add_argument('--descriptor-arena', action='store_true', help='Suballocate immutable metadata with command-generation lifetime')
 parser.add_argument('--uniform-metadata', action='store_true', help='Use the private checked std140 metadata candidate')
 parser.add_argument('--native-bound-sets', action='store_true', help='Borrow ordinary native public sets only for fully bound resources')
+parser.add_argument('--sync-trace', action='store_true', help='Arm bounded CPU-side submit/wait causality captures through a private tag file')
+parser.add_argument('--native-shader-ab', action='store_true', help='Diagnostic read-only native robustness1 graphics variant; never a robustness2 claim')
 parser.add_argument('--gpu-warmup-ms', type=int, default=30000)
 parser.add_argument('--shader-layer', type=Path)
 parser.add_argument('--metadata-read-only', action='store_true')
@@ -35,6 +37,12 @@ if args.uniform_metadata:
 if args.native_bound_sets:
     assert args.action == 'enable' and args.shader_layer
     expected['MAVK_NATIVE_BOUND_SETS'] = '1'
+if args.sync_trace:
+    assert args.action == 'enable' and args.shader_layer
+    expected['MAVK_SYNC_TRACE_ARM'] = str(root / 'mavk-perf/sync-arm')
+if args.native_shader_ab:
+    assert args.action == 'enable' and args.shader_layer and args.native_bound_sets
+    expected['MAVK_DIAGNOSTIC_NATIVE_SHADER_ARM'] = str(root / 'mavk-perf/native-shader-arm')
 if args.guard_cse:
     assert args.action == 'enable' and (args.gpu_current or args.shader_layer)
     expected['MAVK_GUARD_CSE'] = '1'
@@ -70,6 +78,10 @@ if args.gpu_layer:
                     DROIDDECK_MAVK_LAYER_PATH=str(layer) + ':' + str(baseline))
 if args.action == 'enable':
     assert not backup.exists() or not json.loads(backup.read_text())['active'], 'Restore active profile first'
+    if args.sync_trace:
+        (root / 'mavk-perf/sync-arm').write_text('')
+    if args.native_shader_ab:
+        (root / 'mavk-perf/native-shader-arm').write_text('0')
     saved = {'active': True, 'values': {}, 'expected': expected}
     changes = []
     for source in sources:

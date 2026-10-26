@@ -8,7 +8,7 @@
 #include <mavk/compat/shader_guards.hpp>
 
 namespace mavk::compat {
-inline std::vector<uint32_t> uniformGuardMetadata(const std::vector<uint32_t>& code,uint32_t set,uint32_t words,GuardTarget target,bool standardLayout){
+inline std::vector<uint32_t> uniformGuardMetadata(const std::vector<uint32_t>& code,uint32_t set,uint32_t words,GuardTarget target,bool standardLayout,bool scalarLayout=false){
     if(!words||words>1024||code.size()<5||code[3]>UINT32_MAX-8-code.size()/3)throw std::invalid_argument("uniform guard metadata budget");
     std::unordered_map<uint32_t,size_t> definitions;
     std::set<uint32_t> guardSets,metadataBindings,zeroes;
@@ -63,7 +63,7 @@ inline std::vector<uint32_t> uniformGuardMetadata(const std::vector<uint32_t>& c
     out[3]=next;
     const auto environment=target==GuardTarget::Vulkan13?SPV_ENV_VULKAN_1_3:target==GuardTarget::Vulkan12?SPV_ENV_VULKAN_1_2:SPV_ENV_VULKAN_1_1;
     std::string error;spvtools::SpirvTools validator(environment);validator.SetMessageConsumer([&](spv_message_level_t,const char*,const spv_position_t&,const char* text){if(error.size()<2048)error+=text;});
-    spvtools::ValidatorOptions options;options.SetUniformBufferStandardLayout(standardLayout);
+    spvtools::ValidatorOptions options;options.SetUniformBufferStandardLayout(standardLayout);options.SetScalarBlockLayout(scalarLayout);
     if(!validator.Validate(out.data(),out.size(),options))throw std::invalid_argument("uniform metadata validation: "+error);
     return out;
 }

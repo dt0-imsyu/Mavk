@@ -120,6 +120,7 @@ void reportProfileLocked(Device& s){
     s.profileSnapshotNs=s.profileMaterializeNs=s.profileMaterializations=s.profileMetadataBytes=s.profileNativeBinds=0;
     s.profileDiagnosticAllocations=s.profileArenaAllocations=0;
     std::fprintf(stderr,"MAVK_NATIVE_PUBLIC_PROFILE draws=%llu\n",(unsigned long long)s.profileNativePublic);s.profileNativePublic=0;
+    if(!s.nativeShaderABPath.empty()){std::fprintf(stderr,"MAVK_NATIVE_SHADER_AB_PROFILE active=%u graphics=%llu compute=%llu variants=%llu\n",unsigned(s.nativeShaderActive),(unsigned long long)s.profileNativeShaderDraws,(unsigned long long)s.profileNativeShaderCompute,(unsigned long long)s.nativeShaderVariants);s.profileNativeShaderDraws=s.profileNativeShaderCompute=0;}
     s.profileSince=now;
     s.profileGuardNs=s.profileWaitNs=s.profilePresentNs=s.profileGuardCalls=s.profileWaitCalls=s.profilePresents=0;
     s.profileSemaphoreNs=s.profileSemaphoreCalls=s.profileSubmitNs=s.profileSubmitCalls=0;
@@ -204,6 +205,13 @@ bool prepareExecution(Device& s,VkCommandBuffer h,VkPipelineBindPoint point){
             while(end<sets.size()&&sets[end]){if(end<bound.pipeline->schema->sets.size()){const auto& values=bound.sets[end].dynamicOffsets;offsets.insert(offsets.end(),values.begin(),values.end());}end++;}
             s.fn<PFN_vkCmdBindDescriptorSets>("vkCmdBindDescriptorSets")(h,point,generation->pipelineLayout(),first,end-first,sets.data()+first,uint32_t(offsets.size()),offsets.data());if(s.profile)s.profileNativeBinds++;first=end;
         }
+        if(!s.nativeShaderABPath.empty()){
+            const auto now=mavk::diagnostics::SyncTrace::now();
+            if(now>=s.nativeShaderPoll){s.nativeShaderPoll=now+1000000000ull;std::ifstream control(s.nativeShaderABPath);char mode=0;control>>mode;s.nativeShaderActive=mode=='1';}
+            const bool plain=s.nativeShaderActive&&nativePublic&&bool(bound.pipeline->nativeDiagnostic);
+            s.fn<PFN_vkCmdBindPipeline>("vkCmdBindPipeline")(h,point,plain?bound.pipeline->nativeDiagnostic->handle:bound.pipeline->owner->handle);
+            if(plain&&s.profile){if(point==VK_PIPELINE_BIND_POINT_COMPUTE)s.profileNativeShaderCompute++;else s.profileNativeShaderDraws++;}
+        }
         s.guardedDraws++;if(s.trace)std::fprintf(stderr,"MAVK_LAYER_EXECUTE guarded=1 sets=%zu generations=%zu\n",sets.size(),c.generations.size());return true;
     }catch(const std::exception& e){s.gap("guarded execution",e.what());c.failed=true;return false;}
 }
@@ -260,7 +268,7 @@ bool rejectPreludeForTest(Device& s,const ImagePrelude* prelude){
     return false;
 }
 VKAPI_ATTR VkResult VKAPI_CALL queueSubmit(VkQueue q,uint32_t n,const VkSubmitInfo* submits,VkFence f){
-    auto s=queueDevice(q);if(!s)return VK_ERROR_INITIALIZATION_FAILED;std::lock_guard lock(s->mutex);
+    auto s=queueDevice(q);if(!s)return VK_ERROR_INITIALIZATION_FAILED;const auto entry=s->syncTrace?mavk::diagnostics::SyncTrace::now():0;std::lock_guard lock(s->mutex);
     if(s->guarded)for(uint32_t i=0;i<n;i++)for(uint32_t j=0;j<submits[i].commandBufferCount;j++){auto c=s->commands.find(submits[i].pCommandBuffers[j]);if(c==s->commands.end()||c->second.failed||c->second.recording)return VK_ERROR_VALIDATION_FAILED_EXT;}
     try{
         if(s->guarded&&s->nullImages&&!s->nullImages->empty())for(uint32_t i=0;i<n;i++)for(auto p=static_cast<const VkBaseInStructure*>(submits[i].pNext);p;p=p->pNext)
@@ -273,14 +281,19 @@ VKAPI_ATTR VkResult VKAPI_CALL queueSubmit(VkQueue q,uint32_t n,const VkSubmitIn
         std::vector<VkCommandBuffer> measuredCommands;VkSubmitInfo measured{};
         if(sample&&!gpuDecorateSubmit(submits[0],*sample,measuredCommands,measured)){s->gpuProfile=false;sample=nullptr;}
         const auto start=s->profile?std::chrono::steady_clock::now():std::chrono::steady_clock::time_point{};
+        const auto syncId=s->syncTrace?s->syncTrace->submit(q,n,submits,entry):0;
+        if(syncId)for(uint32_t i=0;i<n&&i<256;i++)for(uint32_t j=0;j<submits[i].commandBufferCount&&j<128;j++){
+            auto at=s->commands.find(submits[i].pCommandBuffers[j]);if(at!=s->commands.end()){uint64_t compute=0;for(const auto& pipeline:at->second.pipelines)compute+=pipeline->compute;s->syncTrace->add('C',syncId,mavk::diagnostics::SyncTrace::bits(at->first),at->second.pipelines.size(),at->second.generations.size(),((at->second.pipelines.size()-compute)<<32)|compute);}
+        }
         auto r=s->fn<PFN_vkQueueSubmit>("vkQueueSubmit")(q,prelude?n+1:n,sample?&measured:prelude?combined.data():submits,f);
+        if(syncId)s->syncTrace->add('E',syncId,uint64_t(int64_t(r)));
         if(sample)sample->submitted=r==VK_SUCCESS;
         if(s->profile){s->profileSubmitNs+=uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-start).count());s->profileSubmitCalls++;reportProfileLocked(*s);}
         if(r==VK_SUCCESS){retainImagePrelude(*s,q,std::move(prelude));s->submissions++;}return r;
     }catch(const std::exception& e){s->gap("vkQueueSubmit image prelude",e.what());return VK_ERROR_FEATURE_NOT_PRESENT;}
 }
 VkResult queueSubmit2Named(VkQueue q,uint32_t n,const VkSubmitInfo2* submits,VkFence f,const char* name){
-    auto s=queueDevice(q);if(!s)return VK_ERROR_INITIALIZATION_FAILED;std::lock_guard lock(s->mutex);
+    auto s=queueDevice(q);if(!s)return VK_ERROR_INITIALIZATION_FAILED;const auto entry=s->syncTrace?mavk::diagnostics::SyncTrace::now():0;std::lock_guard lock(s->mutex);
     if(s->guarded)for(uint32_t i=0;i<n;i++)for(uint32_t j=0;j<submits[i].commandBufferInfoCount;j++){auto c=s->commands.find(submits[i].pCommandBufferInfos[j].commandBuffer);if(c==s->commands.end()||c->second.failed||c->second.recording)return VK_ERROR_VALIDATION_FAILED_EXT;}
     try{
         if(s->guarded&&s->nullImages&&!s->nullImages->empty())for(uint32_t i=0;i<n;i++){
@@ -295,7 +308,12 @@ VkResult queueSubmit2Named(VkQueue q,uint32_t n,const VkSubmitInfo2* submits,VkF
         std::vector<VkCommandBufferSubmitInfo> measuredCommands;VkSubmitInfo2 measured{};
         if(sample&&!gpuDecorateSubmit(submits[0],*sample,measuredCommands,measured)){s->gpuProfile=false;sample=nullptr;}
         const auto start=s->profile?std::chrono::steady_clock::now():std::chrono::steady_clock::time_point{};
+        const auto syncId=s->syncTrace?s->syncTrace->submit(q,n,submits,entry):0;
+        if(syncId)for(uint32_t i=0;i<n&&i<256;i++)for(uint32_t j=0;j<submits[i].commandBufferInfoCount&&j<128;j++){
+            auto at=s->commands.find(submits[i].pCommandBufferInfos[j].commandBuffer);if(at!=s->commands.end()){uint64_t compute=0;for(const auto& pipeline:at->second.pipelines)compute+=pipeline->compute;s->syncTrace->add('C',syncId,mavk::diagnostics::SyncTrace::bits(at->first),at->second.pipelines.size(),at->second.generations.size(),((at->second.pipelines.size()-compute)<<32)|compute);}
+        }
         auto r=s->fn<PFN_vkQueueSubmit2>(name)(q,prelude?n+1:n,sample?&measured:prelude?combined.data():submits,f);
+        if(syncId)s->syncTrace->add('E',syncId,uint64_t(int64_t(r)));
         if(sample)sample->submitted=r==VK_SUCCESS;
         if(s->profile){s->profileSubmitNs+=uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-start).count());s->profileSubmitCalls++;reportProfileLocked(*s);}
         if(r==VK_SUCCESS){retainImagePrelude(*s,q,std::move(prelude));s->submissions++;}return r;
@@ -316,12 +334,20 @@ VKAPI_ATTR VkResult VKAPI_CALL profileWaitForFences(VkDevice h,uint32_t n,const 
 VkResult profileWaitSemaphoresNamed(VkDevice h,const VkSemaphoreWaitInfo* info,uint64_t timeout,const char* name){
     auto s=device(h);if(!s)return VK_ERROR_INITIALIZATION_FAILED;
     auto fn=s->fn<PFN_vkWaitSemaphores>(name);if(!s->profile)return fn(h,info,timeout);
-    const auto start=std::chrono::steady_clock::now();const auto result=fn(h,info,timeout);
+    uint64_t syncId=0;if(s->syncTrace){std::lock_guard lock(s->mutex);syncId=s->syncTrace->begin('B',info->flags,timeout,info->semaphoreCount);for(uint32_t i=0;syncId&&i<info->semaphoreCount&&i<128;i++)s->syncTrace->add('T',syncId,mavk::diagnostics::SyncTrace::bits(info->pSemaphores[i]),info->pValues[i]);}
+    const auto start=std::chrono::steady_clock::now();const auto result=fn(h,info,timeout);const auto returned=mavk::diagnostics::SyncTrace::now();
     const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-start).count();
-    {std::lock_guard lock(s->mutex);s->profileSemaphoreNs+=uint64_t(elapsed);s->profileSemaphoreCalls++;reportProfileLocked(*s);}return result;
+    {std::lock_guard lock(s->mutex);if(syncId)s->syncTrace->add('R',syncId,uint64_t(int64_t(result)),uint64_t(elapsed),0,0,returned);s->profileSemaphoreNs+=uint64_t(elapsed);s->profileSemaphoreCalls++;reportProfileLocked(*s);}return result;
 }
 VKAPI_ATTR VkResult VKAPI_CALL profileWaitSemaphores(VkDevice h,const VkSemaphoreWaitInfo* info,uint64_t timeout){return profileWaitSemaphoresNamed(h,info,timeout,"vkWaitSemaphores");}
 VKAPI_ATTR VkResult VKAPI_CALL profileWaitSemaphoresKHR(VkDevice h,const VkSemaphoreWaitInfo* info,uint64_t timeout){return profileWaitSemaphoresNamed(h,info,timeout,"vkWaitSemaphoresKHR");}
+VkResult profileSignalSemaphoreNamed(VkDevice h,const VkSemaphoreSignalInfo* info,const char* name){
+    auto s=device(h);if(!s)return VK_ERROR_INITIALIZATION_FAILED;auto fn=s->fn<PFN_vkSignalSemaphore>(name);
+    uint64_t id=0;if(s->syncTrace){std::lock_guard lock(s->mutex);id=s->syncTrace->begin('H',mavk::diagnostics::SyncTrace::bits(info->semaphore),info->value);}
+    const auto result=fn(h,info);if(id){std::lock_guard lock(s->mutex);s->syncTrace->add('J',id,uint64_t(int64_t(result)));}return result;
+}
+VKAPI_ATTR VkResult VKAPI_CALL profileSignalSemaphore(VkDevice h,const VkSemaphoreSignalInfo* info){return profileSignalSemaphoreNamed(h,info,"vkSignalSemaphore");}
+VKAPI_ATTR VkResult VKAPI_CALL profileSignalSemaphoreKHR(VkDevice h,const VkSemaphoreSignalInfo* info){return profileSignalSemaphoreNamed(h,info,"vkSignalSemaphoreKHR");}
 VKAPI_ATTR VkResult VKAPI_CALL profilePresent(VkQueue q,const VkPresentInfoKHR* info){
     auto s=queueDevice(q);if(!s)return VK_ERROR_INITIALIZATION_FAILED;
     auto fn=s->fn<PFN_vkQueuePresentKHR>("vkQueuePresentKHR");if(!s->profile)return fn(q,info);

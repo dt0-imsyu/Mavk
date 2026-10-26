@@ -1,96 +1,146 @@
 # Mavk
 
-Latest: [live Muck profiling, artifact rollback and limitations](docs/MUCK_GPU_PROFILE_AND_ARTIFACTS_2026-10-25.md).
-Developer prototype: [AHB/input results and remaining gates](docs/DEMO_PREPARATION_2026-10-25.md).
+**Experimental Vulkan compatibility backend over stock Android GPU drivers.**
+First tested on the Galaxy Tab S11 / Mali-G925, without root or firmware changes.
 
-Рабочее название независимого Vulkan runtime/backend для stock Android,
-первый целевой GPU — Mali-G925 на Galaxy Tab S11. Название пока не проверено
-на совпадения с другими проектами или товарными знаками.
+[Русский](README.ru.md) · [DroidDeck fork](https://github.com/dt0-imsyu/DroidDeck) · [Architecture and evidence](docs/DEVELOPER_REVIEW.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
 
-English developer guide: [architecture, results, builds and limits](docs/DEVELOPER_REVIEW.md).
+## What it does
 
-## Цель
+Mavk develops reusable Vulkan resource/synchronization code, compatibility logic
+and presentation adapters for DroidDeck and U-AVF. Android's vendor driver still
+executes the GPU work. **This is not a replacement Mali kernel driver, a complete
+Vulkan ICD, a WDDM driver, or a drop-in Turnip driver ZIP.**
 
-Переиспользуемое userspace-ядро поверх штатного Android Vulkan-драйвера:
-ресурсы, синхронизация, проверяемая совместимость и профилирование. Затем
-адаптеры для Windows ARM64 в U-AVF, DroidDeck и Ubuntu.
+The working gaming prototype is:
 
-Это **не новый аппаратный драйвер Mali** и пока не готовый универсальный
-Vulkan ICD. Самостоятельный Android backend не равен Vulkan внутри VM и
-сам по себе не ускорит DWM. Для этого нужны отдельные гостевые интеграции.
+`Steam → ARM64 Proton/Wine/FEX → experimental DXVK-Sarek → Mavk → libhybris → Android Vulkan/Mali`
 
-## Приоритет
+Optional XCB/Wayland AHardwareBuffer presentation avoids CPU framebuffer readback.
+RGBA uses the direct route; BGRA needs a GPU conversion blit. X11/SHM remains a
+fallback. The Android launcher and compositor belong to the separate DroidDeck fork.
 
-1. Завершение DroidDeck-прототипа: обычный запуск игр и передача разработчикам. Длительная оптимизация FPS остановлена.
-2. Общая совместимость по реальным требованиям приложений, без фиктивных features.
-3. Windows: постоянный IddCx и продуктовая интеграция workspace в U-AVF.
-4. Дальнейший Windows GPU/WDDM R&D и Ubuntu Vulkan, сохраняя VirGL/OpenGL.
+## Try it — install the DroidDeck APK
 
-Актуальные критерии и незавершённые задачи: [ACTIVE_PLAN](docs/ACTIVE_PLAN.md).
-Аппаратные Core/Bridge и ограниченный Windows Vulkan ICD уже проверены;
-это пока **не** означает готовность DXVK, игрового runtime или ускорение DWM.
+Use the fork's [test releases](https://github.com/dt0-imsyu/DroidDeck/releases) and
+[install-and-play guide](https://github.com/dt0-imsyu/DroidDeck/blob/mavk-demo/docs/TRY_TEST_APK.md).
+The APK bundles Mavk and the tested integration. Install it, complete the normal
+runtime download, select Mavk/AHB in Launcher settings, then use ordinary Steam
+Play. No source build or per-game terminal commands are needed for that route.
 
-Цель игровой совместимости на уровне альтернативных GPU-стеков — направление
-разработки, **не обещание паритета со Snapdragon/Turnip**. Сравнение возможно
-только на одинаковых играх, настройках и измерениях frame time.
+Mavk itself is a developer library/layer project: there is no universal Android
+"install this driver" action. Do not copy its libraries into Android system/vendor
+partitions. Standalone consumers need an adapter with the correct loader/ABI,
+resource ownership and presentation contract.
 
-## Проверенный игровой прототип
+## Actual results
 
-Steam → ARM64 Proton/Wine/FEX → экспериментальный DXVK-Sarek → Mavk
-Compatibility → libhybris → штатный Vulkan Mali. Для вывода используется
-необязательный XCB/Wayland AHB backend с acquire/release fences. RGBA передаётся
-напрямую; BGRA требует одного GPU blit, без CPU readback. SHM остаётся fallback.
-Общий Vulkan/Android код находится в `core/`, `compatibility/`, `adapters/android/`;
-интеграция launcher — в `adapters/droiddeck/`, WSI — в `third_party/wsi-layer/`.
-Исходный Android compositor и интерфейс выбора backend принадлежат отдельному
-DroidDeck-форку; Mavk не заменяет Steam/Proton или интерфейс DroidDeck.
+| Test on stock Tab S11 / Mali-G925 | Result |
+| --- | --- |
+| Native Core compute/graphics and GPU readback | PASS; detailed evidence in the review guide/state |
+| Limited Windows Vulkan Loader/ICD and Bridge | Experimental offscreen PASS; not DWM acceleration |
+| Wine D3D11, AHB and 1920→1280→1920 ResizeBuffers | PASS in the focused consumer |
+| HL2, 1920×1080, low settings with medium objects/textures | Owner reports 30+ FPS, stable 60 in some areas |
+| HL2, nearly maximum settings | Owner reports usually 20–30 FPS; rare character/audio hitches |
+| Muck heavy gameplay | Around 12–13 displayed buffers/s in one scene; 9.1 in another |
+| Muck moving menu | Around 34–35 displayed buffers/s; AHB without CPU copies |
+| SHM fallback | Visible moving D3D11 stream; game loading image also rechecked |
 
-| Проверка на Tab S11 / Mali-G925 | Фактический результат |
-|---|---|
-| Native graphics/compute и ограниченный Windows ICD | PASS, см. ссылки ниже |
-| AMD64 Wine D3D11, AHB, ResizeBuffers1920→1280→1920 | PASS, CoreZero/gaps0 |
-| Native D3D11 через fallback SHM | Видимый поток,598 copied buffers/10с |
-| Muck, движущееся меню | ~34–35 отображённых buffers/с, AHB/copy0 |
-| Muck, одна тяжёлая игровая сцена | ~9.1 buffers/с при1600p и1200p |
-| Half-Life2, Full HD | По наблюдению пользователя: обычно20–30FPS почти на максимальных настройках,30–50 на низких; редкие подвисания/повторы звука |
-| Half-Life2, уточнённые настройки | Низкие настройки, средние объекты/текстуры: от30FPS, местами стабильные60 по наблюдению пользователя; зависит от сцены |
-| DDNet | Текущий Linux/FEX startup blocker до Vulkan; не игровой PASS |
+Gameplay reports, Present calls and compositor/SurfaceFlinger buffer counts are
+separate evidence. HL2 is not locked to 60 FPS across all scenes. The final Muck
+shader A/B gave 12.5 / 12.7 / 12.3, with no material gain; FPS research was stopped.
+No exhaustive Vulkan CTS, full upstream DXVK, broad game compatibility or
+Adreno/other-Mali hardware validation is claimed. In-game HL2 resolution changes
+can crash; select resolution before starting the session. Intermittent artifacts,
+first-chapter black transitions and some live D3D9 descriptor aliases remain open.
 
-Buffers/с — измерение SurfaceFlinger и compositor, а не доказательство60
-уникальных игровых кадров. Повторяющиеся чёрные диагональные артефакты остаются
-открытой проблемой; экспериментальная CSE-оптимизация откачена. Измерения на
-нагретом устройстве нельзя сравнивать с холодными без учёта thermal state.
-Полная поддержка upstream DXVK и Vulkan CTS/conformance не заявляется.
+## Embed Mavk Core in another application
 
-План и критерии: [docs/ROADMAP.md](docs/ROADMAP.md).
-Текущее состояние: [docs/STATE.md](docs/STATE.md).
+Requirements: CMake 3.22+, a C++17 compiler and Vulkan headers/loader for the target.
+The caller creates and owns the Vulkan device/queue; Core does not create a guest
+GPU or remote transport. Build/install the independent static library:
 
-## Границы
+```sh
+cmake -S . -B build/core -DCMAKE_BUILD_TYPE=Release
+cmake --build build/core
+cmake --install build/core --prefix build/install
+```
 
-- Stock Android 16, без root, unlock, flash, ослабления SELinux/Code Integrity,
-  private Binder и замены системного crosvm/vendor-драйвера.
-- U-AVF Ubuntu/P7, Windows 8 CPU/storage/firmware и рабочий H.264 path сохраняются.
-- Не объявлять unsupported Vulkan feature поддерживаемой ради запуска приложения.
-- Локальные коммиты разрешены; push и публикация без разрешения запрещены.
-- Лицензии: [LICENSE](LICENSE), [сторонние компоненты](THIRD_PARTY_NOTICES.md).
-  Собственный код Apache2, кроме индивидуально отмеченных файлов; WSI MIT,
-  производный Proton wrapper GPLv3. Сторонний код сохраняет свою лицензию.
-  Полнота corresponding-source комплекта runtime пока не подтверждена.
+For Android add the NDK toolchain and target options at configuration:
 
-На 2026-10-15 native compute и graphics работают на аппаратном G925.
-Простой Surface workload подтверждён независимыми presentation timestamps
-(59.92/с за фиксированные28с). Минимальный Core выделен отдельно; compute/image
-A/B прошёл в3 процессах. Bounded graphics/lifecycle/synchronization-validation
-gate пройден без ошибок; это не исчерпывающая проверка backend. Минимальный
-compute Bridge проверен из Windows через app-owned AVF:8 аппаратных GPU jobs,
-131072 значения проверены гостем,0 validation errors/warnings. Это ещё не ICD
-или ускорение DWM. Graphics Bridge также PASS:3330 пикселей проверены Windows.
-Ограниченный offscreen ICD прошёл runtime-тест в Windows ARM64: стандартный
-Vulkan Loader → ICD → Mali,3330 пикселей проверены самим API-приложением,
-EXIT0,zero validation errors/warnings. Это не WDDM/DWM, не игровой runtime и
-не Vulkan conformance. См. [границы ICD](icd/README.md).
-На 2026-10-16 неизменённый сторонний SaschaWillems renderheadless также
-прошёл в Windows ARM64: стандартный Loader/ICD → Mali, изображение1024²,
-3624 независимые проверки пикселей, EXIT0, ноль validation errors/warnings.
-Пока это offscreen-рендер, не вывод Vulkan-окна, не игровой PASS и не DWM.
-См. [checkpoint](docs/STATE.md).
+```sh
+cmake -S . -B build/android -G Ninja \
+  -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+  -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-29 -DCMAKE_BUILD_TYPE=Release
+cmake --build build/android
+```
+
+In a downstream CMake project, point `Mavk_DIR` at the installed
+`lib/cmake/Mavk` directory, then:
+
+```cmake
+find_package(Mavk CONFIG REQUIRED)
+target_link_libraries(your_application PRIVATE Mavk::Core)
+```
+
+Include `<mavk/core.hpp>`. Keep the borrowed `VkDevice` and queue alive, externally
+synchronize queue use, and complete GPU work before retiring resources. With an
+Android cross-toolchain, package search may require
+`CMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH`; Vulkan still comes from the target NDK.
+This target builds **Core only**, not the compatibility layer, ICD or DroidDeck.
+
+## Integrate the compatibility/presentation adapters
+
+| Directory | Responsibility |
+| --- | --- |
+| `core/` | Native Vulkan resource and submission helpers |
+| `compatibility/` | Descriptor state/lifetime, BC handling, bounded shader guards |
+| `adapters/vulkan-layer/` | Explicit glibc Vulkan layer and native dispatch |
+| `adapters/android/`, `third_party/wsi-layer/` | Android/AHB interfaces and MIT WSI fork |
+| `adapters/droiddeck/` | Runtime packaging and the GPLv3-derived Proton wrapper |
+| `bridge/`, `icd/` | Separate experimental U-AVF/Windows integration |
+| `harness/`, `experiments/` | Hardware consumers and retained development tools |
+
+The glibc layer requires compatible Vulkan/SPIRV-Tools build inputs and an Android
+ABI bridge in DroidDeck; it is not a Bionic drop-in. The optional SPIR-V compiler
+has a separate CMake project under `compatibility/shaders`. Build helpers and
+source pins are documented in the [review guide](docs/DEVELOPER_REVIEW.md).
+Some historical research scripts still use local toolchain paths; they are not
+portable one-command installers. Use the checked APK integration to try games.
+
+Reuse AHB allocation/import, acquire/release fences, fullscreen geometry and
+compositor support as a unit. The WSI library alone does not provide the
+DroidDeck-side protocol or lifecycle. Preserve SHM and the original Adreno path.
+Do not advertise features the chosen driver/adapter does not implement.
+
+## Debugging and verification
+
+* For DroidDeck, use **Share logs** in Setup/session drawer. Include device/GPU,
+  APK version, game, resolution, settings, AHB/SHM selection and a short moving
+  scene. Remove account data before sharing logs.
+* For a controlled developer process, `MAVK_LAYER_PROFILE=1` enables bounded CPU
+  timing summaries; `MAVK_LAYER_TRACE=1` adds verbose call tracking. Both default
+  off. `MAVK_GUARD_REPORTS=0` disables shader diagnostic stores/readback, not the
+  access guards. Keep logging off for performance comparisons.
+* Investigate `MAVK_LAYER_GAP` at the failing API/resource operation. Do not solve
+  it by inventing a supported feature bit or disabling guards for all games.
+* Use actual GPU execution/readback for compatibility changes and recheck a real
+  consumer after Bridge/API changes. Native, verified emulation and unsupported
+  paths must remain distinguishable. Synthetic PASS is not game compatibility.
+* GPU-query/CSE experiments associated with regressions remain disabled. Present
+  counts and refresh Hz alone do not prove unique visible game FPS.
+
+[Current handoff](docs/ACTIVE_PLAN.md) · [Evidence/history](docs/STATE.md) ·
+[Source coverage](docs/RUNTIME_SOURCE_COVERAGE_2026-10-26.md) · [Roadmap](docs/ROADMAP.md)
+
+## License and attribution
+
+Mavk's own code is open source under **Apache License 2.0**. Preserve the copyright,
+license and [NOTICE](NOTICE) when redistributing, and identify your modifications
+as required by that license. Original Mavk work: **dt0-imsyu** and contributors.
+
+Third-party code keeps its original terms: the WSI fork is MIT; the DroidDeck-derived
+Proton wrapper is GPLv3; DXVK-Sarek, Mesa, libhybris, Openbox and compiler dependencies
+are not relicensed as Mavk. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+This experimental source/reviewer package does not claim complete corresponding-source
+coverage for every bundled external binary. The recorded source gaps remain explicit.

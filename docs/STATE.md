@@ -1,3 +1,14 @@
+## 2026-10-26 — accepted experimental reviewer handoff
+
+User chose to keep the APK test-only and close the demo stage, rather than
+continue complete public-distribution source preparation. Normal APK/Steam UI
+instructions and the unsent DroidDeck-team draft are in the fork. Latest HL2
+report: Full HD, low settings with medium objects/textures,30+FPS and stable60
+in some areas (user observation; not locked60 throughout). Google Drive video
+link will come from the user. No push/publication/message was performed.
+Known runtime, resize, FPS and source-coverage limits remain documented; no
+claim of complete binary-distribution compliance or full Vulkan conformance.
+
 ## 2026-10-26 — clean developer APK / ordinary game route
 
 Clean checkout APK installed (SHA256 36d5efc4749ba6ee22726d6be26f9be04f757a24d2ef8f1d4fa4ed7caf59c6f0).

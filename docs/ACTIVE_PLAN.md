@@ -1,6 +1,8 @@
 # Current handoff — 2026-10-26
 
-DroidDeck/Mavk developer prototype implementation is locally committed. No more
+DroidDeck/Mavk developer prototype implementation is locally committed. The user
+accepted closing this stage with a test APK and source/video review; preparing
+a complete public-binary distribution bundle is deferred. No more
 Muck FPS research or speculative shader optimization. No push/publication.
 Production U-AVF/Windows/Ubuntu are unchanged.
 
@@ -29,7 +31,7 @@ Production U-AVF/Windows/Ubuntu are unchanged.
 
 ## Artifacts / remaining gates
 
-Local files: artifacts-local/release-20261026. Includes installed APK, checksums,
+Local delivery: artifacts-local/review-package-20261026. Includes installed APK, checksums,
 source snapshots, exact PE32 Sarek source, checked dependency seed and reports.
 Fork: C:/Users/denis/MainProjects/DroidDeck-Mavk (mavk-demo).
 Mavk: C:/Users/denis/MainProjects/win11ontab/Mavk (main).
@@ -38,8 +40,23 @@ Reviewer guides and message draft are committed. No personal fork remote or
 video URL exists yet. Preserve explicit distinction: source review is ready,
 but public binary distribution still needs complete corresponding-source
 coverage for bundled GPL/LGPL components. Notices alone do not close that gate.
-Do not claim the entire publication goal complete while this remains open.
+Do not claim full public-binary distribution clearance. This is separate from
+the accepted experimental demonstration/reviewer handoff.
 
-Next useful work: close that bounded distribution/source inventory (no new FPS
-experiments), then resume the separate U-AVF GPU bridge roadmap. Historical
-Windows/ICD milestones remain in STATE.md and Git history.
+## User decision / next handoff
+
+On2026-10-26 the user chose the faster test-APK reviewer handoff. Developers
+should install the existing APK and use the normal runtime/Steam UI, not build
+from source or enter per-game commands. The fork docs/TRY_TEST_APK.md explains
+that path and docs/UPSTREAM_MESSAGE.md is the unsent English draft.
+
+Latest user gameplay clarification: Full HD, low settings with medium object
+and texture detail:30+ FPS, stable60 in some areas; not locked60 everywhere.
+The user will upload gameplay to Google Drive and provide a link. Add that,
+the owner's fork URL and APK download URL before sending the draft. No upload,
+message, push or public repository change is currently performed/authorized.
+
+Do not resume FPS or license-recipe hunting for this closed demo stage. Keep
+the source/public-binary caveats recorded; then the next engineering priority
+is the separate U-AVF GPU bridge roadmap, retaining Windows/Ubuntu baselines.
+Historical Windows/ICD milestones remain in STATE.md and Git history.

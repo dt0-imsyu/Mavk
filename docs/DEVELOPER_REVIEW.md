@@ -41,6 +41,9 @@ See [closed A/B](MUCK_SHADER_AB_CLOSED_2026-10-25.md).
 
 User-confirmed HL2 Full HD gameplay is usually20–30FPS near maximum settings,
 30–50 on low, with rare character/audio repeats. These are user observations.
+Latest clarification: low settings with medium object/texture detail give
+30+ FPS, reaching stable 60 FPS in some areas. This is scene-dependent and
+does not establish locked 60 FPS throughout the game.
 Its PE32/D3D9 work and exact current boundary are recorded in
 [PE32_D3D9_2026-10-25.md](PE32_D3D9_2026-10-25.md). Do not call a Valve intro a
 successful gameplay test.

@@ -1,3 +1,15 @@
+## 2026-10-26 — clean developer APK / ordinary game route
+
+Clean checkout APK installed (SHA256 36d5efc4749ba6ee22726d6be26f9be04f757a24d2ef8f1d4fa4ed7caf59c6f0).
+Packaged runtime8213 selected by normal Steam launch; HL2 menu/train and Muck
+menu visible without private PE/layer overrides. AHB copy0 intervals confirmed;
+SHM restart produced the Muck loading image, copy counters and zero-copy0.
+AHB restored. Full HD user gameplay estimates: HL2 usually20–30 near maximum,
+30–50 low; not an independent benchmark or a60FPS claim. Core independently
+builds from a fresh checkout. Local commits only, source/binary license gate
+and broad Windows-host unit failures explicitly open. See ACTIVE_PLAN.md and
+the fork BUILD_CHECKPOINT_2026-10-26.md; artifacts-local/release-20261026.
+
 2026-10-26 CURRENT: user-confirmed HL2 Full HD gameplay, usually20–30FPS near
 maximum graphics and30–50 low; rare character/audio repeats. In-game resize can
 crash; cold launch1920x1080 verified. Do not interrupt recording. New normal-

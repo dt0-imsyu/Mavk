@@ -3,7 +3,7 @@
 DroidDeck/Mavk developer prototype implementation is locally committed. The user
 accepted closing this stage with a test APK and source/video review; preparing
 a complete public-binary distribution bundle is deferred. No more
-Muck FPS research or speculative shader optimization. No push/publication.
+Muck FPS research or speculative shader optimization. Publication was authorized after the owner rechecked normal Steam/HL2/Muck launch.
 Production U-AVF/Windows/Ubuntu are unchanged.
 
 ## Current evidence
@@ -36,8 +36,8 @@ source snapshots, exact PE32 Sarek source, checked dependency seed and reports.
 Fork: C:/Users/denis/MainProjects/DroidDeck-Mavk (mavk-demo).
 Mavk: C:/Users/denis/MainProjects/win11ontab/Mavk (main).
 
-Reviewer guides and message draft are committed. No personal fork remote or
-video URL exists yet. Preserve explicit distinction: source review is ready,
+Reviewer guides and message draft are committed. The public fork is https://github.com/dt0-imsyu/DroidDeck.
+The owner supplied a Google Drive gameplay folder (linked in the fork draft). Preserve explicit distinction: source review is ready,
 but public binary distribution still needs complete corresponding-source
 coverage for bundled GPL/LGPL components. Notices alone do not close that gate.
 Do not claim full public-binary distribution clearance. This is separate from
@@ -52,9 +52,9 @@ that path and docs/UPSTREAM_MESSAGE.md is the unsent English draft.
 
 Latest user gameplay clarification: Full HD, low settings with medium object
 and texture detail:30+ FPS, stable60 in some areas; not locked60 everywhere.
-The user will upload gameplay to Google Drive and provide a link. Add that,
-the owner's fork URL and APK download URL before sending the draft. No upload,
-message, push or public repository change is currently performed/authorized.
+The user supplied the Google Drive gameplay link and it is in the editable
+draft with the real fork/Mavk/APK links. The fork and its test prerelease are now public; Mavk was pushed and remains
+private as requested. No outreach message was sent.
 
 Do not resume FPS or license-recipe hunting for this closed demo stage. Keep
 the source/public-binary caveats recorded; then the next engineering priority

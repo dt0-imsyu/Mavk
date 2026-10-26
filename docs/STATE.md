@@ -1,3 +1,21 @@
+## 2026-10-26 — authorized publication and owner launch check
+
+Owner confirmed Steam, HL2 and Muck launch normally after installing the exact
+APK36d5efc4. Public GitHub fork: https://github.com/dt0-imsyu/DroidDeck (default
+mavk-demo); test prerelease tag mavk-demo-20261026 carries that APK and checksums.
+Mavk main was pushed, visibility remains private; only the owner will open it.
+Both READMEs now have English/Russian editions; Mavk Apache2 retained with NOTICE.
+Install/embed/debug instructions and the unsent English/Discord drafts are ready.
+Owner gameplay Drive folder: https://drive.google.com/drive/folders/14fmiUE_v605aGOI5DPf705XoJdSCv_rI?usp=sharing
+
+Fork inherited catalog automation failed because it attempted to use upstream's
+GitHub App for Droid-Deck/DroidDeck-CI. Owner-only job guard pushed; control run
+40312020882 correctly skipped. Standalone catalog workflow disabled in this fork
+so editing the old prerelease tag cannot re-trigger its obsolete upstream job.
+Optional KDE builds now require manual dispatch in forks; this is not a KWin
+build fix or evidence that every CI test passed. APK/runtime were not rebuilt.
+No outreach message sent; production U-AVF/Windows/Ubuntu remain untouched.
+
 ## 2026-10-26 — accepted experimental reviewer handoff
 
 User chose to keep the APK test-only and close the demo stage, rather than

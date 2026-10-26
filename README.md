@@ -7,6 +7,8 @@ Developer prototype: [AHB/input results and remaining gates](docs/DEMO_PREPARATI
 первый целевой GPU — Mali-G925 на Galaxy Tab S11. Название пока не проверено
 на совпадения с другими проектами или товарными знаками.
 
+English developer guide: [architecture, results, builds and limits](docs/DEVELOPER_REVIEW.md).
+
 ## Цель
 
 Переиспользуемое userspace-ядро поверх штатного Android Vulkan-драйвера:
@@ -19,7 +21,7 @@ Vulkan ICD. Самостоятельный Android backend не равен Vulka
 
 ## Приоритет
 
-1. Игровой DroidDeck-прототип: FPS, артефакты, воспроизводимые игровые проверки.
+1. Завершение DroidDeck-прототипа: обычный запуск игр и передача разработчикам. Длительная оптимизация FPS остановлена.
 2. Общая совместимость по реальным требованиям приложений, без фиктивных features.
 3. Windows: постоянный IddCx и продуктовая интеграция workspace в U-AVF.
 4. Дальнейший Windows GPU/WDDM R&D и Ubuntu Vulkan, сохраняя VirGL/OpenGL.
@@ -50,7 +52,7 @@ DroidDeck-форку; Mavk не заменяет Steam/Proton или интер�
 | Native D3D11 через fallback SHM | Видимый поток,598 copied buffers/10с |
 | Muck, движущееся меню | ~34–35 отображённых buffers/с, AHB/copy0 |
 | Muck, одна тяжёлая игровая сцена | ~9.1 buffers/с при1600p и1200p |
-| Half-Life2 | Не установлена; игровой тест не выполнен |
+| Half-Life2, Full HD | По наблюдению пользователя: обычно20–30FPS почти на максимальных настройках,30–50 на низких; редкие подвисания/повторы звука |
 | DDNet | Текущий Linux/FEX startup blocker до Vulkan; не игровой PASS |
 
 Buffers/с — измерение SurfaceFlinger и compositor, а не доказательство60

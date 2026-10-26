@@ -1,3 +1,10 @@
+2026-10-26 CURRENT: user-confirmed HL2 Full HD gameplay, usually20–30FPS near
+maximum graphics and30–50 low; rare character/audio repeats. In-game resize can
+crash; cold launch1920x1080 verified. Do not interrupt recording. New normal-
+button runtime8213c670 builds but is not installed. Clean build/commits/final
+ordinary-button device checks pending. Muck FPS research CLOSED. See ACTIVE_PLAN
+and DEVELOPER_REVIEW. Prior checkpoints below are historical.
+
 # Mavk checkpoint — 2026-10-23
 
 ## LATEST — uniform metadata / native public sets, 2026-10-25

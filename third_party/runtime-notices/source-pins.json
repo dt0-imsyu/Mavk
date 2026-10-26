@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "scope": "Engineering provenance and retained source evidence, not a legal compliance certification",
+  "runtime_sha256": "8213c6709ef42a73cbd32c1e48aadad49788800a8552fe83f802fa6472ba08cb",
+  "upstream": [
+    {
+      "file": "openbox-3.6.1.tar.gz",
+      "url": "https://openbox.org/dist/openbox/openbox-3.6.1.tar.gz",
+      "bytes": 962665,
+      "sha256": "8b4ac0760018c77c0044fab06a4f0c510ba87eae934d9983b10878483bde7ef7",
+      "status": "UPSTREAM_ARCHIVE_ONLY_RECIPE_NOT_YET_VERIFIED"
+    },
+    {
+      "file": "startup-notification-0.12.tar.gz",
+      "url": "https://www.freedesktop.org/software/startup-notification/releases/startup-notification-0.12.tar.gz",
+      "bytes": 355285,
+      "sha256": "3c391f7e930c583095045cd2d10eb73a64f085c7fde9d260f2652c7cb3cfbe4a",
+      "status": "UPSTREAM_ARCHIVE_ONLY_RECIPE_NOT_YET_VERIFIED"
+    }
+  ],
+  "recipes": [
+    {
+      "package": "openbox",
+      "recipe_commit": "0ef5985630beaa4ed9272d7208f0c3c4067a5163",
+      "recipe_sha256": "8a21e610158021c308edae12f0d745be026cea9d8f482508d0fa43c43055a019",
+      "url": "https://gitlab.archlinux.org/archlinux/packaging/packages/openbox/-/raw/0ef5985630beaa4ed9272d7208f0c3c4067a5163/PKGBUILD",
+      "status": "PINNED_RECIPE_MATCH"
+    },
+    {
+      "package": "startup-notification",
+      "recipe_commit": "1b6e1e2f75d5ad8638d28ebc5cd890979a52e018",
+      "recipe_sha256": "fd3ae7e504d833ed441549573aec6cc282feb850a3def342f90dc65f4918d985",
+      "url": "https://gitlab.archlinux.org/archlinux/packaging/packages/startup-notification/-/raw/1b6e1e2f75d5ad8638d28ebc5cd890979a52e018/PKGBUILD",
+      "status": "PINNED_RECIPE_MATCH"
+    }
+  ],
+  "arm_package_recipes": [
+    {
+      "package": "startup-notification",
+      "pkgbuild_sha256sum": "adac1e472f7aaf8eb12598336fdbb31d2ea45f6ed3758fefcbccaf653a81c843",
+      "candidate_sha256": "43cf37cacd637b499b13be3ebae22d7aaa898b5359e20eb515297356fc07b00b",
+      "exact_match": false,
+      "transformation": "Only arch x86_64 -> aarch64",
+      "binary_archive_sha256": "b72c88dc1514f9b73c9a361e5bff8e3d58903eeed9e9e351f487e4c49246bd02"
+    },
+    {
+      "package": "openbox",
+      "pkgbuild_sha256sum": "f67699630296f270c5f23858ed69548bcd0e557a303feccbe12a0c9f826c6f63",
+      "candidate_sha256": "9a8c4a0265689584972d37fd918c4b84029e33c9a7512591c45bce3012a0bf1c",
+      "exact_match": false,
+      "transformation": "Only arch x86_64 -> aarch64",
+      "binary_archive_sha256": "e7e83e974648155523fa703d1e7c33bb43784871aabb31fb3f8c144065e10ea5"
+    }
+  ],
+  "startup_git": {
+    "url": "https://gitlab.freedesktop.org/xdg/startup-notification.git",
+    "tag": "STARTUP_NOTIFICATION_0_12",
+    "tag_object": "93f0d60c1ad10c0c2aeae75b63c64ed9d708eefe",
+    "commit": "fce365db713897a9cc6b52cac6536f4cb9c3abf1",
+    "signature_reverified": false
+  },
+  "openbox_patches": {
+    "count": 8,
+    "recipe_checksums_match": true,
+    "ordered_application_pass": true
+  },
+  "hybris": {
+    "packaged_binary_sha256": "179870fcf9e1cdfe0495d829df547b53bd950c63e2981ff162b53a4d02687654",
+    "retained_build_binary_matches": true,
+    "source_independently_rebuilt": false
+  },
+  "mesa": {
+    "upstream_archive_sha256": "412df33a1bb3c785ed698555a3972118a37c458e7accf6ae53f4bb87b3db454a",
+    "local_patch": "experiments/droiddeck/zink-ui-glibc243.patch"
+  },
+  "complete_corresponding_source": false
+}

@@ -25,3 +25,9 @@ Public distribution still requires the exact downstream package build recipes,
 patches and required corresponding sources, as well as source/notices for the
 remaining runtime components. Plain license text or a URL alone is not proof
 that all those requirements are fulfilled.
+
+The 2026-10-26 source supplement now retains upstream archives, the recipe-used
+startup-notification Git tag, all eight checksum-matched Openbox patches,
+Mesa source/local patch, and retained hybris/SPIRV compiler source. Public pins
+are in `source-pins.json`; exact boundaries and the still-missing ARM recipe
+hashes are in `docs/RUNTIME_SOURCE_COVERAGE_2026-10-26.md`. No binary changed.
